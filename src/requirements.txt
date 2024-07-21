@@ -1,2 +1,5 @@
 mininet==2.3.0
 ryu>=4.36.0
+tcpdump 
+iperf 
+hping3
