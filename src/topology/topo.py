@@ -3,9 +3,10 @@ from mininet.net import Mininet
 from mininet.node import Controller, OVSKernelSwitch, RemoteController
 from mininet.cli import CLI
 from mininet.log import setLogLevel
+import os
 
 class CustomTopo(Topo):
-    def build_topology(self):
+    def build(self):
         # Adding 6 hosts
         h1 = self.addHost('h1', ip='10.1.1.1/24', mac='00:00:00:00:00:01')
         h2 = self.addHost('h2', ip='10.1.1.2/24', mac='00:00:00:00:00:02')
@@ -35,6 +36,7 @@ class CustomTopo(Topo):
 
 if __name__ == '__main__':
     setLogLevel('info')
+    os.environ['LANG'] = 'C'
     topo = CustomTopo()
     net = Mininet(topo=topo, switch=OVSKernelSwitch, controller=RemoteController('c0', ip='127.0.0.1', port=6653), ipBase='10.1.1.0/24')
     net.start()
