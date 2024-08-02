@@ -1,14 +1,13 @@
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, set_ev_cls
+from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, CONFIG_DISPATCHER, set_ev_cls
 from ryu.ofproto import ofproto_v1_3
+from ryu.lib import hub
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 import csv
 import time
 from ryu.topology import event
-from ryu.topology.api import get_switch, get_link
-from collections import defaultdict
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -30,10 +29,10 @@ class TrafficMonitor(app_manager.RyuApp):
     def _state_change_handler(self, ev):
         datapath = ev.datapath
         if ev.state == MAIN_DISPATCHER:
-            self.logger.info('Registering datapath: %016x', datapath.id)
+            self.logger.info('Registering datapath: %016x', datapath.id if datapath.id else 0)
             self.datapaths[datapath.id] = datapath
         elif ev.state == DEAD_DISPATCHER:
-            self.logger.info('Unregistering datapath: %016x', datapath.id)
+            self.logger.info('Unregistering datapath: %016x', datapath.id if datapath.id else 0)
             if datapath.id in self.datapaths:
                 del self.datapaths[datapath.id]
 
@@ -44,7 +43,7 @@ class TrafficMonitor(app_manager.RyuApp):
             hub.sleep(10)
 
     def _request_stats(self, datapath):
-        self.logger.info('Sending stats request to: %016x', datapath.id)
+        self.logger.info('Sending stats request to: %016x', datapath.id if datapath.id else 0)
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
@@ -75,27 +74,48 @@ class TrafficMonitor(app_manager.RyuApp):
     @set_ev_cls(event.EventSwitchEnter)
     def switch_enter_handler(self, ev):
         switch = ev.switch
-        self.logger.info('Switch entered: %016x', switch.dp.id)
+        self.logger.info('Switch entered: %016x', switch.dp.id if switch.dp.id else 0)
+        self.install_default_flows(switch.dp)
     
     @set_ev_cls(event.EventSwitchLeave)
     def switch_leave_handler(self, ev):
         switch = ev.switch
-        self.logger.info('Switch left: %016x', switch.dp.id)
+        self.logger.info('Switch left: %016x', switch.dp.id if switch.dp.id else 0)
 
-def add_flow(self, datapath, priority, match, actions):
-    ofproto = datapath.ofproto
-    parser = datapath.ofproto_parser
-    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-    mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst)
-    datapath.send_msg(mod)
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
 
-@set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
-def switch_features_handler(self, ev):
-    datapath = ev.msg.datapath
-    ofproto = datapath.ofproto
-    parser = datapath.ofproto_parser
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        if buffer_id:
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, priority=priority,
+                                    match=match, instructions=inst)
+        else:
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
+                                    match=match, instructions=inst)
+        datapath.send_msg(mod)
 
-    # Example rule: send all packets to controller
-    match = parser.OFPMatch()
-    actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
-    self.add_flow(datapath, 0, match, actions)
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    def switch_features_handler(self, ev):
+        datapath = ev.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        # Install default flows
+        self.install_default_flows(datapath)
+
+    def install_default_flows(self, datapath):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        # Example rule: send all packets to controller
+        match = parser.OFPMatch()
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
+        self.add_flow(datapath, 0, match, actions)
+
+        # Additional rules to allow communication between hosts
+        # Assuming a single switch with multiple hosts connected to different ports
+        for port in range(1, 4):
+            match = parser.OFPMatch(in_port=port)
+            actions = [parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
+            self.add_flow(datapath, 1, match, actions)
