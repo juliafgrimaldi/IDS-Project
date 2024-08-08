@@ -7,7 +7,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 import csv
 import time
-from ryu.topology import event
+from ryu.topology.api import get_switch, get_link, get_host
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -101,21 +101,31 @@ class TrafficMonitor(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # Install default flows
         self.install_default_flows(datapath)
 
     def install_default_flows(self, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # Example rule: send all packets to controller
+        # send all packets to controller
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
-        # Additional rules to allow communication between hosts
-        # Assuming a single switch with multiple hosts connected to different ports
-        for port in range(1, 4):
-            match = parser.OFPMatch(in_port=port)
-            actions = [parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
-            self.add_flow(datapath, 1, match, actions)
+
+    def add_default_host_flows(self, datapath):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        # rules to allow communication between hosts
+        # assuming a single switch with multiple hosts connected to different ports
+
+        hosts = get_host(self, datapath.id)
+        host_ports = [host.port.port_no for host in hosts]
+        
+        for in_port in host_ports:
+            for out_port in host_ports:
+                if in_port != out_port:
+                    match = parser.OFPMatch(in_port=in_port)
+                    actions = [parser.OFPActionOutput(out_port)]
+                    self.add_flow(datapath, 1, match, actions)
