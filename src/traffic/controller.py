@@ -8,6 +8,7 @@ from ryu.lib.packet import ethernet
 import csv
 import time
 from ryu.topology.api import get_switch, get_link, get_host
+from ryu.topology import event
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -113,19 +114,48 @@ class TrafficMonitor(app_manager.RyuApp):
         self.add_flow(datapath, 0, match, actions)
 
 
-    def add_default_host_flows(self, datapath):
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def _packet_in_handler(self, ev):
+        msg = ev.msg
+        datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        # rules to allow communication between hosts
-        # assuming a single switch with multiple hosts connected to different ports
+        dpid = datapath.id
+        self.mac_to_port.setdefault(dpid, {})
 
-        hosts = get_host(self, datapath.id)
-        host_ports = [host.port.port_no for host in hosts]
-        
-        for in_port in host_ports:
-            for out_port in host_ports:
-                if in_port != out_port:
-                    match = parser.OFPMatch(in_port=in_port)
-                    actions = [parser.OFPActionOutput(out_port)]
-                    self.add_flow(datapath, 1, match, actions)
+        # analyse the received packets using the packet library.
+        pkt = packet.Packet(msg.data)
+        eth_pkt = pkt.get_protocol(ethernet.ethernet)
+        dst = eth_pkt.dst
+        src = eth_pkt.src
+
+        # get the received port number from packet_in message.
+        in_port = msg.match['in_port']
+
+        self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+
+        # learn a mac address to avoid FLOOD next time.
+        self.mac_to_port[dpid][src] = in_port
+
+        # if the destination mac address is already learned,
+        # decide which port to output the packet, otherwise FLOOD.
+        if dst in self.mac_to_port[dpid]:
+            out_port = self.mac_to_port[dpid][dst]
+        else:
+            out_port = ofproto.OFPP_FLOOD
+
+        # construct action list.
+        actions = [parser.OFPActionOutput(out_port)]
+
+        # install a flow on switches to avoid packet_in next time.
+        if out_port != ofproto.OFPP_FLOOD:
+            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+            self.add_flow(datapath, 1, match, actions)
+
+        # construct packet_out message and send it.
+        out = parser.OFPPacketOut(datapath=datapath,
+                                  buffer_id=ofproto.OFP_NO_BUFFER,
+                                  in_port=in_port, actions=actions,
+                                  data=msg.data)
+        datapath.send_msg(out)
