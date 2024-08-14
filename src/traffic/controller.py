@@ -16,6 +16,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(TrafficMonitor, self).__init__(*args, **kwargs)
         self.datapaths = {}
+        self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor)
         self.filename = 'traffic_stats.csv'
         self._initialize_csv()
