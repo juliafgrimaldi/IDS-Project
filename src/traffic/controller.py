@@ -23,7 +23,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _initialize_csv(self):
         with open(self.filename, 'w', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'port', 'rx_packets', 'tx_packets', 'rx_bytes', 'tx_bytes', 'rx_errors', 'tx_errors']
+            fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
@@ -56,22 +56,26 @@ class TrafficMonitor(app_manager.RyuApp):
         body = ev.msg.body
         timestamp = time.time()
 
+        for stat in sorted([flow for flow in body if flow.priority != 0], key = lambda flow: (flow.match['in_port'], flow.match['eth_dst'])):
+            self.logger.info("Flow: time=%f, in_port=%s, eth_dst=%s, packets=%d, bytes=%d, duration_sec=%d", timestamp, stat.match['in_port'], stat.match.get('eth_dst', 'NULL'), stat.packet_count, stat.byte_count, stat.duration_sec)
+
+            self.export_flow_stats({
+                'time': timestamp,
+                'dpid': ev.msg.datapath.id,
+                'in_port': stat.match['in_port'],
+                'eth_dst': stat.match.get('eth_dst', 'NULL'),
+                'packets': stat.packet_count,
+                'bytes': stat.byte_count,
+                'duration_sec': stat.duration_sec
+            })
+
+    def export_flow_stats(self, flow_stats):
         with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'port', 'rx_packets', 'tx_packets', 'rx_bytes', 'tx_bytes', 'rx_errors', 'tx_errors']
+            fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow(flow_stats)
             
-            for stat in body:
-                writer.writerow({
-                    'time': timestamp,
-                    'dpid': ev.msg.datapath.id,
-                    'port': stat.port_no,
-                    'rx_packets': stat.rx_packets,
-                    'tx_packets': stat.tx_packets,
-                    'rx_bytes': stat.rx_bytes,
-                    'tx_bytes': stat.tx_bytes,
-                    'rx_errors': stat.rx_errors,
-                    'tx_errors': stat.tx_errors
-                })
+           
 
     @set_ev_cls(event.EventSwitchEnter)
     def switch_enter_handler(self, ev):
@@ -115,6 +119,10 @@ class TrafficMonitor(app_manager.RyuApp):
         self.add_flow(datapath, 0, match, actions)
 
 
+
+
+#TODO: add rule to drop packet if dest doesnt exists
+#TODO: add regex to filter unvalid ip ranges
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         msg = ev.msg
