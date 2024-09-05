@@ -51,10 +51,10 @@ class TrafficMonitor(app_manager.RyuApp):
         req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
         datapath.send_msg(req)
 
-    @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _port_stats_reply_handler(self, ev):
         body = ev.msg.body
-        timestamp = time.time()
+        timestamp = time.time() 
 
         for stat in sorted([flow for flow in body if flow.priority != 0], key = lambda flow: (flow.match['in_port'], flow.match['eth_dst'])):
             self.logger.info("Flow: time=%f, in_port=%s, eth_dst=%s, packets=%d, bytes=%d, duration_sec=%d", timestamp, stat.match['in_port'], stat.match.get('eth_dst', 'NULL'), stat.packet_count, stat.byte_count, stat.duration_sec)
