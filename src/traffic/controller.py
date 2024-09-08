@@ -1,3 +1,6 @@
+import math
+import csv
+import time
 from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, CONFIG_DISPATCHER, set_ev_cls
@@ -5,8 +8,6 @@ from ryu.ofproto import ofproto_v1_3
 from ryu.lib import hub
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
-import csv
-import time
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
 
@@ -45,44 +46,38 @@ class TrafficMonitor(app_manager.RyuApp):
             hub.sleep(10)
 
     def _request_stats(self, datapath):
-        self.logger.info('Sending stats request to: %016x', datapath.id if datapath.id else 0)
+        self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-        req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
+        req = parser.OFPFlowStatsRequest(datapath)
         datapath.send_msg(req)
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
-    def _port_stats_reply_handler(self, ev):
+    def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
-        timestamp = time.time() 
+        timestamp = time.time()
 
-        for stat in sorted([flow for flow in body if flow.priority != 0], key = lambda flow: (flow.match['in_port'], flow.match['eth_dst'])):
-            self.logger.info("Flow: time=%f, in_port=%s, eth_dst=%s, packets=%d, bytes=%d, duration_sec=%d", timestamp, stat.match['in_port'], stat.match.get('eth_dst', 'NULL'), stat.packet_count, stat.byte_count, stat.duration_sec)
+        with open(self.filename, 'a', newline='') as csvfile:
+            fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            self.export_flow_stats({
+            for stat in body:
+                writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'in_port': stat.match['in_port'],
+                'in_port': stat.match['in_port'] if 'in_port' in stat.match else 'NULL'
                 'eth_dst': stat.match.get('eth_dst', 'NULL'),
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'duration_sec': stat.duration_sec
             })
 
-    def export_flow_stats(self, flow_stats):
-        with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writerow(flow_stats)
-            
-           
-
     @set_ev_cls(event.EventSwitchEnter)
     def switch_enter_handler(self, ev):
         switch = ev.switch
         self.logger.info('Switch entered: %016x', switch.dp.id if switch.dp.id else 0)
         self.install_default_flows(switch.dp)
-    
+
     @set_ev_cls(event.EventSwitchLeave)
     def switch_leave_handler(self, ev):
         switch = ev.switch
@@ -118,11 +113,6 @@ class TrafficMonitor(app_manager.RyuApp):
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
-
-
-
-#TODO: add rule to drop packet if dest doesnt exists
-#TODO: add regex to filter unvalid ip ranges
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         msg = ev.msg
