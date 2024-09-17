@@ -10,6 +10,7 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
+import os
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -23,10 +24,11 @@ class TrafficMonitor(app_manager.RyuApp):
         self._initialize_csv()
 
     def _initialize_csv(self):
-        with open(self.filename, 'w', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
+        if not os.path.exists(self.filename):
+            with open(self.filename, 'w', newline='') as csvfile:
+                fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
