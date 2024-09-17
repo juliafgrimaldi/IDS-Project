@@ -5,6 +5,7 @@ from mininet.cli import CLI
 from mininet.log import setLogLevel
 import time
 import os
+import random
 
 class CustomTopo(Topo):
     def build(self):
@@ -32,29 +33,35 @@ class CustomTopo(Topo):
         self.addLink(s2, s3)
 
 def simulate_attacks(net):
-    h3 = net.get('h3')
-    h5 = net.get('h5')
-    h6 = net.get('h6')
-    h4 = net.get('h4')
+    hosts = [net.get('h1'), net.get('h2'), net.get('h3'), net.get('h4'), net.get('h5'), net.get('h6')]
 
-    # SYN flood w/ h3
-    print("Starting SYN flood attack with h3...")
-    h3.cmd('hping3 --flood -p 80 10.1.1.4 &')
+    attack_interval = 10
+    attack_types = ['syn', 'udp', 'icmp', 'http']
+    attack_duration = random.randint(10,60)
 
-    # UDP Flood w/ h5
-    print("Starting UDP flood attack with h5...")
-    h5.cmd('iperf -c 10.1.1.4 -u -b 10M -t 20 &')  # 10 Mbps for 20 seconds
+    for _ in range(int(attack_duration / attack_interval)):
+        attacker = random.choice(hosts) 
+        victim = random.choice([host.IP() for host in hosts if host != attacker]) 
+        attack_type = random.choice(attack_types) 
 
-    # ICMP flood w/ h6
-    print("Starting ICMP flood attack with h6...")
-    h6.cmd('hping3 --flood --icmp 10.1.1.4 &')
+        if attack_type == 'syn':
+            print(f"Starting SYN flood attack with {attacker.name} targeting {victim}...")
+            attacker.cmd(f'hping3 --flood -p 80 {victim} &')
 
-    time.sleep(30) 
+        elif attack_type == 'udp':
+            print(f"Starting UDP flood attack with {attacker.name} targeting {victim}...")
+            attacker.cmd(f'iperf -c {victim} -u -b 20M -t {attack_interval} &')
+
+        elif attack_type == 'icmp':
+            print(f"Starting ICMP flood attack with {attacker.name} targeting {victim}...")
+            attacker.cmd(f'hping3 --flood --icmp {victim} &')
+
+        time.sleep(attack_interval)
+
     print("Stopping all the attacks...")
-    h3.cmd('killall hping3')
-    h5.cmd('killall iperf')
-    h6.cmd('killall hping3')
-    h4.cmd('killall iperf')
+    for host in hosts:
+        host.cmd('killall hping3')
+        host.cmd('killall iperf')
 
 def run_custom_topo():
     topo = CustomTopo()
