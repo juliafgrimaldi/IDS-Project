@@ -46,17 +46,17 @@ def simulate_attacks(net):
 
         if attack_type == 'syn':
             for victim in victims:
-                print(f"Starting SYN flood attack with {attacker.name} targeting {victim}...")
+                print("Starting SYN flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('hping3 --flood -p 80 -i u1000 {} &'.format(victim))
 
         elif attack_type == 'udp':
             for victim in victims:
-                print(f"Starting UDP flood attack with {attacker.name} targeting {victim}...")
+                print("Starting UDP flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('iperf -c {} -u -b 100M -t {} &'.format(victim, attack_interval))
 
         elif attack_type == 'icmp':
             for victim in victims:
-                print(f"Starting ICMP flood attack with {attacker.name} targeting {victim}...")
+                print("Starting ICMP flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('hping3 --flood --icmp -i u100 {} &'.format(victim))
 
         time.sleep(attack_interval)

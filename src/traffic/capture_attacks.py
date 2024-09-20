@@ -67,7 +67,7 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'in_port': stat.match['in_port'] if 'in_port' in stat.match else 'NULL'
+                'in_port': stat.match['in_port'] if 'in_port' in stat.match else 'NULL',
                 'eth_dst': stat.match.get('eth_dst', 'NULL'),
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
