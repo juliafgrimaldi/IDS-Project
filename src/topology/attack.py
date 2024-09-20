@@ -37,24 +37,27 @@ def simulate_attacks(net):
 
     attack_interval = 10
     attack_types = ['syn', 'udp', 'icmp', 'http']
-    attack_duration = random.randint(10,60)
+    attack_duration = random.randint(60,120)
 
     for _ in range(int(attack_duration / attack_interval)):
         attacker = random.choice(hosts) 
-        victim = random.choice([host.IP() for host in hosts if host != attacker]) 
+        victims = random.choice([host.IP() for host in hosts if host != attacker], k=3) # 3 targets
         attack_type = random.choice(attack_types) 
 
         if attack_type == 'syn':
-            print(f"Starting SYN flood attack with {attacker.name} targeting {victim}...")
-            attacker.cmd(f'hping3 --flood -p 80 {victim} &')
+            for victim in victims:
+                print(f"Starting SYN flood attack with {attacker.name} targeting {victim}...")
+                attacker.cmd('hping3 --flood -p 80 -i u1000 {} &'.format(victim))
 
         elif attack_type == 'udp':
-            print(f"Starting UDP flood attack with {attacker.name} targeting {victim}...")
-            attacker.cmd(f'iperf -c {victim} -u -b 20M -t {attack_interval} &')
+            for victim in victims:
+                print(f"Starting UDP flood attack with {attacker.name} targeting {victim}...")
+                attacker.cmd('iperf -c {} -u -b 100M -t {} &'.format(victim, attack_interval))
 
         elif attack_type == 'icmp':
-            print(f"Starting ICMP flood attack with {attacker.name} targeting {victim}...")
-            attacker.cmd(f'hping3 --flood --icmp {victim} &')
+            for victim in victims:
+                print(f"Starting ICMP flood attack with {attacker.name} targeting {victim}...")
+                attacker.cmd('hping3 --flood --icmp -i u100 {} &'.format(victim))
 
         time.sleep(attack_interval)
 
