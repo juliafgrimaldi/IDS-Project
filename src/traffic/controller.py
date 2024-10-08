@@ -11,6 +11,7 @@ from ryu.lib.packet import ethernet
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
 import os
+from ML.knn import train_knn, predict_knn
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -20,7 +21,9 @@ class TrafficMonitor(app_manager.RyuApp):
         self.datapaths = {}
         self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor)
-        self.filename = 'traffic_stats.csv'
+        self.train_file = 'train_traffic_stats.csv'
+        self.filename = 'traffic_status.csv'
+        self.flow_model = None
         self._initialize_csv()
 
     def _initialize_csv(self):
@@ -30,6 +33,26 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
+    def knn_training(self):
+        self.logger.info("Treinando K-NN ...")
+        self.knn_model, self.selector, self.scaler = train_knn(self.train_file)
+
+    def knn_predict(self):
+        try:
+            self.logger.info("Predição com K-NN ...")
+            y_flow_pred = predict_knn(self.knn_model, self.selector, self.scaler, self.filename)
+
+            legitimate_traffic = 0
+            ddos_traffic = 0
+            for pred in y_flow_pred:
+                if pred == 0:
+                    legitimate_traffic += 1
+                else:
+                    ddos_traffic += 1
+
+            self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
+        except Exception as e:
+            self.logger.error(f"Erro na predição do KNN: {e}")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
