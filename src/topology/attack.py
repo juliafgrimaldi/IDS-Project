@@ -41,7 +41,7 @@ def simulate_attacks(net):
 
     for _ in range(int(attack_duration / attack_interval)):
         attacker = random.choice(hosts) 
-        victims = random.choice([host.IP() for host in hosts if host != attacker], k=3) # 3 targets
+        victims = random.choice([host.IP() for host in hosts if host != attacker]) 
         attack_type = random.choice(attack_types) 
 
         if attack_type == 'syn':

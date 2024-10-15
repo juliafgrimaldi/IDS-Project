@@ -25,6 +25,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_status.csv'
         self.flow_model = None
         self._initialize_csv()
+        self.knn_training()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -70,6 +71,7 @@ class TrafficMonitor(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             hub.sleep(10)
+            self.knn_predict()
 
     def _request_stats(self, datapath):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)

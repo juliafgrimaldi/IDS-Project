@@ -4,3 +4,5 @@ tcpdump
 iperf 
 hping3
 eventlet==0.30.2
+pandas
+numpy
