@@ -41,7 +41,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def knn_predict(self):
         try:
             self.logger.info("Predição com K-NN ...")
-            y_flow_pred = predict_knn(self.knn_model, self.selector, self.scaler, self.filename)
+            y_flow_pred = predict_knn(self.knn_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
