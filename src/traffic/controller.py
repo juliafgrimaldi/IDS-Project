@@ -36,7 +36,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def knn_training(self):
         self.logger.info("Treinando K-NN ...")
-        self.knn_model, self.selector, self.scaler = train_knn(self.train_file)
+        self.knn_model, self.selector, self.encoder, self.imputer, self.scaler = train_knn(self.train_file)
 
     def knn_predict(self):
         try:

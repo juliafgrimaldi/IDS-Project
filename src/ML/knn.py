@@ -6,7 +6,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report, accuracy_score
-import logger
+import logging
 
 def train_knn(file_path):
     data = pd.read_csv(file_path)
@@ -20,8 +20,8 @@ def train_knn(file_path):
     # Identificar colunas numéricas e categóricas (não numéricas)
     numeric_columns = data.select_dtypes(include=[np.number]).columns
     categorical_columns = data.select_dtypes(exclude=[np.number]).columns
-    data.iloc[:, 3] = data.iloc[:, 3].astype(str).str.replace(':', '', regex=False)
-    
+    # data.iloc[:, 3] = data.iloc[:, 3].astype(str).str.replace(':', '', regex=False)
+
     # Preencher valores ausentes (colunas numéricas)
     imputer = SimpleImputer(strategy='mean')
     data_imputed = pd.DataFrame(imputer.fit_transform(data[numeric_columns]), columns=numeric_columns)
@@ -33,7 +33,7 @@ def train_knn(file_path):
     # Aplicar One-Hot Encoding às colunas categóricas (melhor estratégio)
     encoder = OneHotEncoder(sparse=False, drop='first')  # drop='first' para evitar redundancias
     data_encoded = pd.DataFrame(encoder.fit_transform(data[categorical_columns]),
-                                columns=encoder.get_feature_names(categorical_columns))
+                                columns=encoder.get_feature_names_out(categorical_columns))
     
     data_combined = pd.concat([data_scaled, data_encoded], axis=1)
 
