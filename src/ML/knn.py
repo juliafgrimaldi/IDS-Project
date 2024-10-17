@@ -20,7 +20,8 @@ def train_knn(file_path):
     # Identificar colunas numéricas e categóricas (não numéricas)
     numeric_columns = data.select_dtypes(include=[np.number]).columns
     categorical_columns = data.select_dtypes(exclude=[np.number]).columns
-
+    data.iloc[:, 3] = data.iloc[:, 3].astype(str).str.replace(':', '', regex=False)
+    
     # Preencher valores ausentes (colunas numéricas)
     imputer = SimpleImputer(strategy='mean')
     data_imputed = pd.DataFrame(imputer.fit_transform(data[numeric_columns]), columns=numeric_columns)
