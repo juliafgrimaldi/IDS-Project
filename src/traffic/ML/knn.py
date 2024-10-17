@@ -17,31 +17,31 @@ def train_knn(file_path):
     # Tratar valores infinitos, substituindo por NaN e preenchendo com a média
     data.replace([np.inf, -np.inf], np.nan, inplace=True)
 
+     # Separar features e label
+    X = data.drop('label', axis=1) 
+    y = data['label']
+
     # Identificar colunas numéricas e categóricas (não numéricas)
-    numeric_columns = data.select_dtypes(include=[np.number]).columns
-    categorical_columns = data.select_dtypes(exclude=[np.number]).columns
-    # data.iloc[:, 3] = data.iloc[:, 3].astype(str).str.replace(':', '', regex=False)
+    numeric_columns = X.select_dtypes(include=[np.number]).columns
+    categorical_columns = X.select_dtypes(exclude=[np.number]).columns
 
     # Preencher valores ausentes (colunas numéricas)
     imputer = SimpleImputer(strategy='mean')
-    data_imputed = pd.DataFrame(imputer.fit_transform(data[numeric_columns]), columns=numeric_columns)
+    X[numeric_columns] = imputer.fit_transform(X[numeric_columns])
 
     # Normalizar os dados com minmax (colunas numéricas)
     scaler = MinMaxScaler()
-    data_scaled = pd.DataFrame(scaler.fit_transform(data_imputed), columns=data_imputed.columns)
+    X[numeric_columns] = scaler.fit_transform(X[numeric_columns])
 
     # Aplicar One-Hot Encoding às colunas categóricas (melhor estratégio)
     encoder = OneHotEncoder(sparse=False, drop='first')  # drop='first' para evitar redundancias
-    data_encoded = pd.DataFrame(encoder.fit_transform(data[categorical_columns]),
+    data_encoded = pd.DataFrame(encoder.fit_transform(X[categorical_columns]),
                                 columns=encoder.get_feature_names_out(categorical_columns))
     
-    data_combined = pd.concat([data_scaled, data_encoded], axis=1)
+    data_combined = pd.concat([X[numeric_columns], data_encoded], axis=1)
 
-    # Separar features e label
-    X = data_combined.drop('label', axis=1) 
-    y = data_combined['label']
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(data_combined, y, test_size=0.3, random_state=42)
 
     # Seleção de Atributos
     selector = SelectKBest(chi2, k=min(10, X_train.shape[1]))
