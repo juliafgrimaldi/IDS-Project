@@ -45,10 +45,9 @@ def simulate_normal_traffic(net):
     # normal traffic between h1 and h2
     h1.cmd('iperf -c 10.1.1.2 -t 20 &')  # 20 seconds of TCP traffic
 
-    # normal traffic between h3 and h4
-    h3.cmd('iperf -c 10.1.1.4 -t 20 &')  # 20 seconds of TCP traffic
+    h3.cmd('curl http://10.1.1.4 &')
 
-    h5.cmd('iperf -c 10.1.1.6 -t 20 &')
+    h5.cmd('ping -c 10.1.1.6 &')
     
     time.sleep(25)  
 

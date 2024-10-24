@@ -48,7 +48,7 @@ def train_knn(file_path):
     X_train_selected = selector.fit_transform(X_train, y_train)
     X_test_selected = selector.transform(X_test)
 
-    knn_model = KNeighborsClassifier(n_neighbors=5)
+    knn_model = KNeighborsClassifier(n_neighbors=3)
     knn_model.fit(X_train_selected, y_train)
 
     # Avaliação do modelo
@@ -75,7 +75,7 @@ def predict_knn(model, selector, encoder, imputer, scaler, predict_file):
 
     # Aplicar One-Hot Encoding nas colunas categóricas
     encoded = pd.DataFrame(encoder.transform(predict_flow_dataset[categorical_columns]),
-                                columns=encoder.get_feature_names(categorical_columns))
+                                columns=encoder.get_feature_names_out(categorical_columns))
     
     X_predict_combined = pd.concat([X_predict_scaled, encoded], axis=1)
 
@@ -83,11 +83,5 @@ def predict_knn(model, selector, encoder, imputer, scaler, predict_file):
     X_predict_selected = selector.transform(X_predict_combined)
 
     y_pred = model.predict(X_predict_selected)
-
-    for i, prediction in enumerate(y_pred):
-        if prediction == 0:
-            logger.info(f"Prediction {i+1}: Legitimate traffic")
-        else:
-            logger.info(f"Prediction {i+1}: DDoS attack")
 
     return y_pred
