@@ -105,14 +105,18 @@ class TrafficMonitor(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
-        self.install_default_flows(datapath)
+        self.install_default_flows(datapath, ev)
 
-    def install_default_flows(self, datapath):
+    def install_default_flows(self, datapath, ev):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-
+        msg = ev.msg
+        in_port = msg.match['in_port']
+        pkt = packet.Packet(msg.data)
+        eth_pkt = pkt.get_protocol(ethernet.ethernet)
+        dst = eth_pkt.dst
         # send all packets to controller
-        match = parser.OFPMatch()
+        match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
