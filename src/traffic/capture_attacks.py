@@ -3,10 +3,12 @@ import csv
 import time
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, set_ev_cls
+from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, CONFIG_DISPATCHER, set_ev_cls
 from ryu.ofproto import ofproto_v1_3
+from ryu.lib import hub
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
+from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
 import os
 
@@ -28,83 +30,18 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
-    def switch_features_handler(self, ev):
-        datapath = ev.msg.datapath
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
-        # Instale um fluxo padrão que envia todos os pacotes desconhecidos para o controlador
-        match = parser.OFPMatch()
-        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
-        self.add_flow(datapath, 0, match, actions)
-
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle=0, hard=0):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-        if buffer_id:
-            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
-                                    idle_timeout=idle, hard_timeout=hard,
-                                    priority=priority, match=match,
-                                    instructions=inst)
-        else:
-            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    idle_timeout=idle, hard_timeout=hard,
-                                    match=match, instructions=inst)
-            
-        datapath.send_msg(mod)
-
-    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
-    def _packet_in_handler(self, ev):
-        msg = ev.msg
-        datapath = msg.datapath
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        in_port = msg.match['in_port']
-
-        # Analise o pacote recebido
-        pkt = packet.Packet(msg.data)
-        eth = pkt.get_protocols(ethernet.ethernet)[0]
-
-        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
-            # Ignore pacotes LLDP
-            return
-
-        dst = eth.dst
-        src = eth.src
-
-        dpid = datapath.id
-        self.mac_to_port.setdefault(dpid, {})
-
-        # Aprenda o endereço MAC para evitar inundação
-        self.mac_to_port[dpid][src] = in_port
-
-        # Verifique se o endereço de destino está na tabela
-        if dst in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][dst]
-        else:
-            out_port = ofproto.OFPP_FLOOD
-
-        actions = [parser.OFPActionOutput(out_port)]
-
-        # Crie um fluxo específico para o pacote atual se o destino é conhecido
-        if out_port != ofproto.OFPP_FLOOD:
-            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-            self.add_flow(datapath, 1, match, actions)
-
-        # Construa o PacketOut e envie o pacote ao destino
-        data = None
-        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-            data = msg.data
-
-        out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
-                                  in_port=in_port, actions=actions, data=data)
-        datapath.send_msg(out)
+    @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
+    def _state_change_handler(self, ev):
+        datapath = ev.datapath
+        if ev.state == MAIN_DISPATCHER:
+            self.logger.info('Registering datapath: %016x', datapath.id if datapath.id else 0)
+            self.datapaths[datapath.id] = datapath
+        elif ev.state == DEAD_DISPATCHER:
+            self.logger.info('Unregistering datapath: %016x', datapath.id if datapath.id else 0)
+            if datapath.id in self.datapaths:
+                del self.datapaths[datapath.id]
 
     def _monitor(self):
-        # Função de monitoramento de estatísticas
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
@@ -128,12 +65,92 @@ class TrafficMonitor(app_manager.RyuApp):
 
             for stat in body:
                 writer.writerow({
-                    'time': timestamp,
-                    'dpid': ev.msg.datapath.id,
-                    'in_port': stat.match['in_port'] if 'in_port' in stat.match else 'NULL',
-                    'eth_dst': stat.match.get('eth_dst', 'NULL'),
-                    'packets': stat.packet_count,
-                    'bytes': stat.byte_count,
-                    'duration_sec': stat.duration_sec,
-                    'label': '1'
-                })
+                'time': timestamp,
+                'dpid': ev.msg.datapath.id,
+                'in_port': stat.match['in_port'] if 'in_port' in stat.match else 'NULL',
+                'eth_dst': stat.match.get('eth_dst', 'NULL'),
+                'packets': stat.packet_count,
+                'bytes': stat.byte_count,
+                'duration_sec': stat.duration_sec,
+                'label': '1'
+            })
+
+    @set_ev_cls(event.EventSwitchEnter)
+    def switch_enter_handler(self, ev):
+        switch = ev.switch
+        self.logger.info('Switch entered: %016x', switch.dp.id if switch.dp.id else 0)
+        self.install_default_flows(switch.dp)
+
+    @set_ev_cls(event.EventSwitchLeave)
+    def switch_leave_handler(self, ev):
+        switch = ev.switch
+        self.logger.info('Switch left: %016x', switch.dp.id if switch.dp.id else 0)
+
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle=0, hard=0):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        if buffer_id:
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, idle_timeout=idle, hard_timeout=hard, priority=priority,
+                                    match=match, instructions=inst)
+        else:
+            mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
+                                    idle_timeout=idle, hard_timeout=hard, match=match, instructions=inst)
+        datapath.send_msg(mod)
+
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    def switch_features_handler(self, ev):
+        datapath = ev.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        match = parser.OFPMatch()
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
+        self.add_flow(datapath, 0, match, actions)
+
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def _packet_in_handler(self, ev):
+        msg = ev.msg
+        datapath = msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        dpid = datapath.id
+        self.mac_to_port.setdefault(dpid, {})
+
+        # analyse the received packets using the packet library.
+        pkt = packet.Packet(msg.data)
+        eth_pkt = pkt.get_protocols(ethernet.ethernet)[0]
+        dst = eth_pkt.dst
+        src = eth_pkt.src
+
+        # get the received port number from packet_in message.
+        in_port = msg.match['in_port']
+
+        self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
+
+        # learn a mac address to avoid FLOOD next time.
+        self.mac_to_port[dpid][src] = in_port
+
+        # if the destination mac address is already learned,
+        # decide which port to output the packet, otherwise FLOOD.
+        if dst in self.mac_to_port[dpid]:
+            out_port = self.mac_to_port[dpid][dst]
+        else:
+            out_port = ofproto.OFPP_FLOOD
+
+        # construct action list.
+        actions = [parser.OFPActionOutput(out_port)]
+
+        # install a flow on switches to avoid packet_in next time.
+        if out_port != ofproto.OFPP_FLOOD:
+            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+            self.add_flow(datapath, 1, match, actions)
+
+        # construct packet_out message and send it.
+        out = parser.OFPPacketOut(datapath=datapath,
+                                  buffer_id=ofproto.OFP_NO_BUFFER,
+                                  in_port=in_port, actions=actions,
+                                  data=msg.data)
+        datapath.send_msg(out)
