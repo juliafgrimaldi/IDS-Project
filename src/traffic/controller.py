@@ -178,7 +178,7 @@ class TrafficMonitor(app_manager.RyuApp):
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
             self.add_flow(datapath, 1, match, actions)
-
+            time.sleep(0.5)
         # construct packet_out message and send it.
         out = parser.OFPPacketOut(datapath=datapath,
                                   buffer_id=ofproto.OFP_NO_BUFFER,
