@@ -119,7 +119,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _packet_in_handler(self, ev):
         msg = ev.msg
         datapath = msg.datapath
-        ofproto = datapath.ofprotos
+        ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
         dpid = datapath.id
