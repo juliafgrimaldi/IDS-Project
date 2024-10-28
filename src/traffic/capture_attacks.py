@@ -60,7 +60,7 @@ class TrafficMonitor(app_manager.RyuApp):
         body = ev.msg.body
         timestamp = time.time()
         self.logger.debug("Flow stat: dpid=%s, in_port=%s, eth_dst=%s, packets=%d, bytes=%d", 
-                  ev.msg.datapath.id, in_port, eth_dst, stat.packet_count, stat.byte_count)
+                  ev.msg.datapath.id, stat.match['in_port'], stat.match.get('eth_dst'), stat.packet_count, stat.byte_count)
         with open(self.filename, 'a', newline='') as csvfile:
             fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
