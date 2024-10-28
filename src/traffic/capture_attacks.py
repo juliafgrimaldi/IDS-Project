@@ -59,7 +59,8 @@ class TrafficMonitor(app_manager.RyuApp):
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
         timestamp = time.time()
-        self.logger.debug("Flow stat: dpid=%s, in_port=%s, eth_dst=%s, packets=%d, bytes=%d", 
+        for stat in body:
+            self.logger.debug("Flow stat: dpid=%s, in_port=%s, eth_dst=%s, packets=%d, bytes=%d", 
                   ev.msg.datapath.id, stat.match['in_port'], stat.match.get('eth_dst'), stat.packet_count, stat.byte_count)
         with open(self.filename, 'a', newline='') as csvfile:
             fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
