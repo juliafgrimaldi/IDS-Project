@@ -52,16 +52,13 @@ class TrafficMonitor(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         req = parser.OFPFlowStatsRequest(datapath)
-        time.sleep(0.5)
         datapath.send_msg(req)
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
         timestamp = time.time()
-        for stat in body:
-            self.logger.debug("Flow stat: dpid=%s, in_port=%s, eth_dst=%s, packets=%d, bytes=%d", 
-                  ev.msg.datapath.id, stat.match['in_port'], stat.match.get('eth_dst'), stat.packet_count, stat.byte_count)
+
         with open(self.filename, 'a', newline='') as csvfile:
             fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -113,11 +110,11 @@ class TrafficMonitor(app_manager.RyuApp):
     def install_default_flows(self, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+
         # send all packets to controller
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
-        time.sleep(0.5)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
@@ -157,7 +154,7 @@ class TrafficMonitor(app_manager.RyuApp):
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
             self.add_flow(datapath, 1, match, actions)
-            time.sleep(10)
+            time.sleep(0.5)
         # construct packet_out message and send it.
         out = parser.OFPPacketOut(datapath=datapath,
                                   buffer_id=ofproto.OFP_NO_BUFFER,
