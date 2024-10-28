@@ -86,17 +86,17 @@ class TrafficMonitor(app_manager.RyuApp):
         switch = ev.switch
         self.logger.info('Switch left: %016x', switch.dp.id if switch.dp.id else 0)
 
-    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle=0, hard=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
 
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
         if buffer_id:
-            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, priority=priority,
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, idle_timeout=idle, hard_timeout=hard, priority=priority,
                                     match=match, instructions=inst)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst)
+                                    idle_timeout=idle, hard_timeout=hard, match=match, instructions=inst)
         datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -110,13 +110,9 @@ class TrafficMonitor(app_manager.RyuApp):
     def install_default_flows(self, datapath, ev):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-        msg = ev.msg
-        in_port = msg.match['in_port']
-        pkt = packet.Packet(msg.data)
-        eth_pkt = pkt.get_protocol(ethernet.ethernet)
-        dst = eth_pkt.dst
+    
         # send all packets to controller
-        match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+        match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
@@ -132,10 +128,10 @@ class TrafficMonitor(app_manager.RyuApp):
 
         # analyse the received packets using the packet library.
         pkt = packet.Packet(msg.data)
-        eth_pkt = pkt.get_protocol(ethernet.ethernet)
+        eth_pkt = pkt.get_protocols(ethernet.ethernet)[0]
         dst = eth_pkt.dst
         src = eth_pkt.src
-
+        
         # get the received port number from packet_in message.
         in_port = msg.match['in_port']
 
