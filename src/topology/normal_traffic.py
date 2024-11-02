@@ -56,20 +56,20 @@ def simulate_normal_traffic(net, duration=10, interval=3):
             dst.cmd('iperf -s &')   
             print("Simulating traffic TCP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('iperf -c {} -t {} &'.format(dst_ip, duration))
-            sleep(duration + 2)
+            time.sleep(duration + 2)
             dst.cmd('killall iperf')
 
         elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
             src.cmd('ping -c 4 {} &'.format(dst_ip)) 
-            sleep(2)
+            time.sleep(2)
 
         elif traffic_type == 'curl':
             print("Simulating HTTP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('curl http://{} &'.format(dst_ip))
-            sleep(2)
+            time.sleep(2)
         
-        sleep(1)
+        time.sleep(1)
 
 def run_custom_topo():
     topo = CustomTopo()
