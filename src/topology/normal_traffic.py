@@ -59,7 +59,7 @@ def simulate_normal_traffic(net, duration=10, interval=3):
             sleep(duration + 2)
             dst.cmd('killall iperf')
 
-         elif traffic_type == 'ping':
+        elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
             src.cmd('ping -c 4 {} &'.format(dst_ip)) 
             sleep(2)
