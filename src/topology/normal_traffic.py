@@ -42,7 +42,7 @@ def simulate_normal_traffic(net, duration=10, interval=3):
 
     hosts = [net.get('h{}'.format(i)) for i in range(1,7)]
     
-    for _ in range(intervals):
+    for _ in range(interval):
         src = choice(hosts)
         dst = choice(hosts)
 
