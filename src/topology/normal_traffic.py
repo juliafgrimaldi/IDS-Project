@@ -3,6 +3,7 @@ from mininet.net import Mininet
 from mininet.node import Controller, OVSKernelSwitch, RemoteController
 from mininet.cli import CLI
 from mininet.log import setLogLevel
+from random import choice
 import time
 import os  
 
@@ -31,7 +32,7 @@ class CustomTopo(Topo):
         self.addLink(s1, s2)
         self.addLink(s2, s3)
 
-def simulate_normal_traffic(net):
+def simulate_normal_traffic(net, duration=10, interval=3):
     h1 = net.get('h1')
     h2 = net.get('h2')
     h3 = net.get('h3')
@@ -39,21 +40,36 @@ def simulate_normal_traffic(net):
     h5 = net.get('h5')
     h6 = net.get('h6')
 
-    h2.cmd('iperf -s &')
-    h4.cmd('iperf -s &')
-
-    # normal traffic between h1 and h2
-    h1.cmd('iperf -c 10.1.1.2 -t 20 &')  # 20 seconds of TCP traffic
-
-    h3.cmd('curl http://10.1.1.4 &')
-
-    h5.cmd('ping -c 10.1.1.6 &')
+    hosts = [net.get('h{}'.format(i)) for i in range(1,7)]
     
-    time.sleep(25)  
+    for _ in range(intervals):
+        src = choice(hosts)
+        dst = choice(hosts)
 
-    print("Stopping iperf servers...")
-    h2.cmd('killall iperf')
-    h4.cmd('killall iperf')
+        while dst  == src:
+            dst = choice(hosts)
+
+        dst_ip = dst.IP()
+        traffic_type = choice(['iperf', 'ping', 'curl'])  
+
+        if traffic_type == 'iperf':
+            dst.cmd('iperf -s &')   
+            print("Simulating traffic TCP between {} and {}".format(src.IP(), dst_ip))
+            src.cmd('iperf -c {} -t {} &'.format(dst_ip, duration))
+            sleep(duration + 2)
+            dst.cmd('killall iperf')
+
+         elif traffic_type == 'ping':
+            print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
+            src.cmd('ping -c 4 {} &'.format(dst_ip)) 
+            sleep(2)
+
+        elif traffic_type == 'curl':
+            print("Simulating HTTP between {} and {}".format(src.IP(), dst_ip))
+            src.cmd('curl http://{} &'.format(dst_ip))
+            sleep(2)
+        
+        sleep(1)
 
 def run_custom_topo():
     topo = CustomTopo()
@@ -61,6 +77,7 @@ def run_custom_topo():
     
     net.start()
 
+    print("Simulating normal traffic...")
     simulate_normal_traffic(net)
 
     CLI(net)
