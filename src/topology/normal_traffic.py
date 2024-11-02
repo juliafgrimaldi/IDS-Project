@@ -3,6 +3,7 @@ from mininet.net import Mininet
 from mininet.node import Controller, OVSKernelSwitch, RemoteController
 from mininet.cli import CLI
 from mininet.log import setLogLevel
+from mininet.link import TCLink
 from random import choice
 import time
 import os  
@@ -73,7 +74,7 @@ def simulate_normal_traffic(net, duration=10, interval=3):
 
 def run_custom_topo():
     topo = CustomTopo()
-    net = Mininet(topo=topo, controller=RemoteController, switch=OVSKernelSwitch)
+    net = Mininet(topo=topo, link=TCLink, controller=RemoteController, switch=OVSKernelSwitch)
     
     net.start()
 
