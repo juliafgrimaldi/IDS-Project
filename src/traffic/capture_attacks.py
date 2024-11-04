@@ -26,7 +26,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
             with open(self.filename, 'w', newline='') as csvfile:
-                fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
+                fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
@@ -60,17 +60,18 @@ class TrafficMonitor(app_manager.RyuApp):
         timestamp = time.time()
 
         with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'in_port', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
+            fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             for stat in body:
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'in_port': stat.match['in_port'] if 'in_port' in stat.match else 'NULL',
-                'eth_dst': stat.match.get('eth_dst', 'NULL'),
+                'ip_src': stat.ip_src,
+                'tp_src': tp_src,
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
+                'ip_proto': stat.match['ip_proto'],
                 'duration_sec': stat.duration_sec,
                 'label': '1'
             })
