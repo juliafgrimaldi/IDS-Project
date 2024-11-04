@@ -67,8 +67,8 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'ip_src': stat.ip_src,
-                'tp_src': tp_src,
+                'ip_src': stat.match['ipv4_src'],
+                'tp_src': stat.match['tcp_src'] if 'tcp_src' in stat.match else stat.match['udp_src']
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'ip_proto': stat.match['ip_proto'],

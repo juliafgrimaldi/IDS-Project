@@ -59,7 +59,7 @@ def simulate_attacks(net):
                 print("Starting ICMP flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('hping3 --flood -1 -V -d 120 --rand-source {} &'.format(victim))
 
-        time.sleep(attack_interval)
+        time.sleep(10)
 
     print("Stopping all the attacks...")
     for host in hosts:
