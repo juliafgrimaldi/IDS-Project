@@ -120,8 +120,8 @@ class TrafficMonitor(app_manager.RyuApp):
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
         if ev.msg.msg_len < ev.msg.total_len:
-        self.logger.debug("packet truncated: only %s of %s bytes",
-                          ev.msg.msg_len, ev.msg.total_len)
+            self.logger.debug("packet truncated: only %s of %s bytes",
+                            ev.msg.msg_len, ev.msg.total_len)
 
         msg = ev.msg
         datapath = msg.datapath
