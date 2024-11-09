@@ -119,22 +119,29 @@ class TrafficMonitor(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
+        if ev.msg.msg_len < ev.msg.total_len:
+        self.logger.debug("packet truncated: only %s of %s bytes",
+                          ev.msg.msg_len, ev.msg.total_len)
+
         msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+        in_port = msg.match['in_port']
 
-        dpid = datapath.id
-        self.mac_to_port.setdefault(dpid, {})
 
         # analyse the received packets using the packet library.
         pkt = packet.Packet(msg.data)
         eth_pkt = pkt.get_protocols(ethernet.ethernet)[0]
+
+        # ignore LLDP packets
+        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
+        return
+
         dst = eth_pkt.dst
         src = eth_pkt.src
-
-        # get the received port number from packet_in message.
-        in_port = msg.match['in_port']
+        dpid = datapath.id
+        self.mac_to_port.setdefault(dpid, {})
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
@@ -153,12 +160,49 @@ class TrafficMonitor(app_manager.RyuApp):
 
         # install a flow on switches to avoid packet_in next time.
         if out_port != ofproto.OFPP_FLOOD:
-            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-            self.add_flow(datapath, 1, match, actions)
-            time.sleep(0.5)
-        # construct packet_out message and send it.
-        out = parser.OFPPacketOut(datapath=datapath,
-                                  buffer_id=ofproto.OFP_NO_BUFFER,
-                                  in_port=in_port, actions=actions,
-                                  data=msg.data)
+        # Verify if its an ip packet and creates an appropriate match
+            if eth.ethertype == ether_types.ETH_TYPE_IP:
+                ip = pkt.get_protocol(ipv4.ipv4)
+                srcip = ip.src
+                dstip = ip.dst
+                protocol = ip.proto
+
+                # ICMP
+                if protocol == in_proto.IPPROTO_ICMP:
+                    t = pkt.get_protocol(icmp.icmp)
+                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP,
+                                        ipv4_src=srcip, ipv4_dst=dstip,
+                                        ip_proto=protocol,
+                                        icmpv4_code=t.code,
+                                        icmpv4_type=t.type)
+                # TCP
+                elif protocol == in_proto.IPPROTO_TCP:
+                    t = pkt.get_protocol(tcp.tcp)
+                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP,
+                                        ipv4_src=srcip, ipv4_dst=dstip,
+                                        ip_proto=protocol,
+                                        tcp_src=t.src_port,
+                                        tcp_dst=t.dst_port)
+                # UDP
+                elif protocol == in_proto.IPPROTO_UDP:
+                    u = pkt.get_protocol(udp.udp)
+                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP,
+                                            ipv4_src=srcip, ipv4_dst=dstip,
+                                            ip_proto=protocol,
+                                            udp_src=u.src_port,
+                                            udp_dst=u.dst_port)
+                
+                # Verify if packet has a valid buffer_id
+                if msg.buffer_id != ofproto.OFP_NO_BUFFER:
+                    self.add_flow(datapath, 1, match, actions, msg.buffer_id, idle=20, hard=100)
+                    return
+                else:
+                    self.add_flow(datapath, 1, match, actions, idle=20, hard=100)
+
+        data = None
+        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+            data = msg.data
+
+        out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
+                                in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
