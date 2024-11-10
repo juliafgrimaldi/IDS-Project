@@ -7,7 +7,9 @@ from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER, CONFIG_DISP
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib import hub
 from ryu.lib.packet import packet
-from ryu.lib.packet import ethernet
+from ryu.lib.packet import ethernet, ether_types
+from ryu.lib.packet import ipv4, icmp, tcp, udp
+from ryu.lib.packet import in_proto
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
 import os
@@ -67,8 +69,8 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'ip_src': stat.match['ipv4_src'],
-                'tp_src': stat.match['tcp_src'] if 'tcp_src' in stat.match else stat.match['udp_src'] ,
+                'ip_src': stat.match.get('ipv4_src', 'NULL'),
+                'tp_src': stat.match('tcp_src', stat.match.get('udp_src', 'NULL')) ,
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'ip_proto': stat.match['ip_proto'],
@@ -135,8 +137,8 @@ class TrafficMonitor(app_manager.RyuApp):
         eth_pkt = pkt.get_protocols(ethernet.ethernet)[0]
 
         # ignore LLDP packets
-        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
-        return
+        if eth_pkt.ethertype == ether_types.ETH_TYPE_LLDP:
+            return
 
         dst = eth_pkt.dst
         src = eth_pkt.src
@@ -161,7 +163,7 @@ class TrafficMonitor(app_manager.RyuApp):
         # install a flow on switches to avoid packet_in next time.
         if out_port != ofproto.OFPP_FLOOD:
         # Verify if its an ip packet and creates an appropriate match
-            if eth.ethertype == ether_types.ETH_TYPE_IP:
+            if eth_pkt.ethertype == ether_types.ETH_TYPE_IP:
                 ip = pkt.get_protocol(ipv4.ipv4)
                 srcip = ip.src
                 dstip = ip.dst
