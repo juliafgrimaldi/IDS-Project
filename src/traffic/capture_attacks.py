@@ -65,15 +65,15 @@ class TrafficMonitor(app_manager.RyuApp):
             fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            for stat in body:
+            for stat in sorted([flow for flow in body if flow.priority == 1], key=lambda flow: flow.match.get('ipv4_src', 'NULL')):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
                 'ip_src': stat.match.get('ipv4_src', 'NULL'),
-                'tp_src': stat.match('tcp_src', stat.match.get('udp_src', 'NULL')) ,
+                'tp_src': stat.match.get('tcp_src', stat.match.get('udp_src', 'NULL')) ,
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
-                'ip_proto': stat.match['ip_proto'],
+                'ip_proto': stat.match.get('ip_proto', 'NULL'),
                 'duration_sec': stat.duration_sec,
                 'label': '1'
             })
