@@ -53,7 +53,11 @@ class TrafficMonitor(app_manager.RyuApp):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+
         req = parser.OFPFlowStatsRequest(datapath)
+        datapath.send_msg(req)
+
+        req = parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
         datapath.send_msg(req)
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
@@ -62,15 +66,17 @@ class TrafficMonitor(app_manager.RyuApp):
         timestamp = time.time()
 
         with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
+            fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'in_port', 'eth_dst', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            for stat in sorted([flow for flow in body if flow.priority == 1], key=lambda flow: flow.match.get('ipv4_src', 'NULL')):
+            for stat in sorted([flow for flow in body if flow.priority == 1], key=lambda flow: (flow.match['ipv4_src'], flow.match['ipv4_dst'], flow.match['in_port'], flow.match['eth_dst'], flow.match['ip_proto'])):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
                 'ip_src': stat.match.get('ipv4_src', 'NULL'),
                 'tp_src': stat.match.get('tcp_src', stat.match.get('udp_src', 'NULL')) ,
+                'in_port': stat.match['in_port'],
+                'eth_dst': stat.match['eth_dst'],
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'ip_proto': stat.match.get('ip_proto', 'NULL'),
