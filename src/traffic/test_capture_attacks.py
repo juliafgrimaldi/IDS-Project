@@ -69,13 +69,13 @@ class TrafficMonitor(app_manager.RyuApp):
             fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            for stat in sorted([flow for flow in body if flow.priority == 1], key=lambda flow: (flow.match['in_port'], flow.match['eth_dst'], flow.match['eth_src'])):
+            for stat in sorted([flow for flow in body if flow.priority == 0], key=lambda flow: (flow.match.get('in_port', 'NULL'), flow.match.get('eth_dst', 'NULL'), flow.match.get('eth_src', 'NULL'))):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'in_port': stat.match['in_port'],
-                'eth_src': stat.match['eth_src'],
-                'eth_dst': stat.match['eth_dst'],
+                'in_port': stat.match.get('in_port', 'N/A'),
+                'eth_src': stat.match.get('eth_src', 'N/A'),
+                'eth_dst': stat.match.get('eth_dst', 'N/A'),
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'duration_sec': stat.duration_sec,
