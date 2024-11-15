@@ -73,9 +73,9 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'in_port': stat.match.get('in_port', 'N/A'),
-                'eth_src': stat.match.get('eth_src', 'N/A'),
-                'eth_dst': stat.match.get('eth_dst', 'N/A'),
+                'in_port': stat.match['in_port'],
+                'eth_src': stat.match['eth_src'],
+                'eth_dst': stat.match['eth_dst'],
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'duration_sec': stat.duration_sec,
