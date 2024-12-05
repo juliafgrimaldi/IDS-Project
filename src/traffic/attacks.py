@@ -82,7 +82,7 @@ class TrafficMonitorSwitch(app_manager.RyuApp):
                     'packets': stat.packet_count,
                     'bytes': stat.byte_count,
                     'duration_sec': stat.duration_sec,
-                    'label': '1'  # Example: mark all traffic as attack (1) or normal (0)
+                    'label': '1'  
                 })
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
@@ -104,8 +104,14 @@ class TrafficMonitorSwitch(app_manager.RyuApp):
         datapath = ev.msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+        msg = ev.msg
+        in_port = msg.match['in_port']
+        pkt = packet.Packet(msg.data)
+        eth = pkt.get_protocol(ethernet.ethernet)
+        dst = eth.dst
+        src = eth.src
 
-        match = parser.OFPMatch()
+        match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
