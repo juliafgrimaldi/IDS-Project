@@ -89,6 +89,13 @@ class TrafficMonitorSwitch(app_manager.RyuApp):
         """Add a flow entry to a datapath."""
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+
+        if ofproto.OFP_VERSION == ofproto_v1_3.OFP_VERSION:
+            match = parser.OFPMatch(in_port=match.get('in_port', ofproto.OFPP_ANY),
+                                    eth_src=match.get('eth_src', None),
+                                    eth_dst=match.get('eth_dst', None),
+                                    **match)
+
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
