@@ -119,7 +119,7 @@ class TrafficMonitor(app_manager.RyuApp):
         parser = datapath.ofproto_parser
 
         # send all packets to controller
-        match = parser.OFPMatch()
+        match = parser.OFPMatch(in_port=in_port)
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
