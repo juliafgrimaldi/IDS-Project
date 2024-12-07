@@ -6,6 +6,7 @@ from mininet.log import setLogLevel
 import time
 import os
 import random
+from time import sleep
 
 class CustomTopo(Topo):
     def build(self):
@@ -16,9 +17,9 @@ class CustomTopo(Topo):
         h5 = self.addHost('h5', ip='10.1.1.5/24', mac='00:00:00:00:00:05')
         h6 = self.addHost('h6', ip='10.1.1.6/24', mac='00:00:00:00:00:06')
 
-        s1 = self.addSwitch('s1', protocols='OpenFlow13')
-        s2 = self.addSwitch('s2', protocols='OpenFlow13')
-        s3 = self.addSwitch('s3', protocols='OpenFlow13')
+        s1 = self.addSwitch('s1', cls=OVSKernelSwitch, protocols='OpenFlow13')
+        s2 = self.addSwitch('s2', cls=OVSKernelSwitch, protocols='OpenFlow13')
+        s3 = self.addSwitch('s3', cls=OVSKernelSwitch, protocols='OpenFlow13')
 
         self.addLink(h1, s1)
         self.addLink(h2, s1)
@@ -37,7 +38,7 @@ def simulate_attacks(net):
 
     attack_interval = 10
     attack_types = ['syn', 'udp', 'icmp']
-    attack_duration = random.randint(60,120)
+    attack_duration = random.randint(10, 20)
 
     for _ in range(int(attack_duration / attack_interval)):
         attacker = random.choice(hosts) 
@@ -48,24 +49,27 @@ def simulate_attacks(net):
             for victim in victims:
                 print("Starting SYN flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('hping3 --flood -S -V -d 120 -p 80 --rand-source {} &'.format(victim))
+                sleep(100)
 
         elif attack_type == 'udp':
             for victim in victims:
                 print("Starting UDP flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('iperf -c {} -u -b 10M -t {} &'.format(victim, attack_interval))
+                sleep(100)
 
         elif attack_type == 'icmp':
             for victim in victims:
                 print("Starting ICMP flood attack with {} targeting {}...".format(attacker.name, victim))
                 attacker.cmd('hping3 --flood -1 -V -d 120 --rand-source {} &'.format(victim))
-
-        time.sleep(10)
+                sleep(100)
+        
 
     print("Stopping all the attacks...")
     for host in hosts:
         host.cmd('killall hping3')
         host.cmd('killall iperf')
 
+    net.stop()
 def run_custom_topo():
     topo = CustomTopo()
     net = Mininet(topo=topo, controller=RemoteController, switch=OVSKernelSwitch)
