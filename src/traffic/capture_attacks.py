@@ -8,8 +8,6 @@ from ryu.ofproto import ofproto_v1_3
 from ryu.lib import hub
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet, ether_types
-from ryu.lib.packet import ipv4, icmp, tcp, udp
-from ryu.lib.packet import in_proto
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
 import os
@@ -28,7 +26,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
             with open(self.filename, 'w', newline='') as csvfile:
-                fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
+                fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
@@ -66,20 +64,18 @@ class TrafficMonitor(app_manager.RyuApp):
         timestamp = time.time()
 
         with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'in_port', 'eth_dst', 'packets', 'bytes', 'ip_proto', 'duration_sec', 'label']
+            fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            for stat in sorted([flow for flow in body if flow.priority == 1], key=lambda flow: (flow.match['ipv4_src'], flow.match['ipv4_dst'], flow.match['in_port'], flow.match['eth_dst'], flow.match['ip_proto'])):
+            for stat in body:
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'ip_src': stat.match.get('ipv4_src', 'NULL'),
-                'tp_src': stat.match.get('tcp_src', stat.match.get('udp_src', 'NULL')) ,
                 'in_port': stat.match['in_port'],
+                'eth_src': stat.match['eth_src'],
                 'eth_dst': stat.match['eth_dst'],
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
-                'ip_proto': stat.match.get('ip_proto', 'NULL'),
                 'duration_sec': stat.duration_sec,
                 'label': '1'
             })
@@ -148,7 +144,8 @@ class TrafficMonitor(app_manager.RyuApp):
 
         dst = eth_pkt.dst
         src = eth_pkt.src
-        dpid = datapath.id
+
+        dpid = format(datapath.id, "d").zfill(16)
         self.mac_to_port.setdefault(dpid, {})
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
@@ -168,49 +165,18 @@ class TrafficMonitor(app_manager.RyuApp):
 
         # install a flow on switches to avoid packet_in next time.
         if out_port != ofproto.OFPP_FLOOD:
-        # Verify if its an ip packet and creates an appropriate match
-            if eth_pkt.ethertype == ether_types.ETH_TYPE_IP:
-                ip = pkt.get_protocol(ipv4.ipv4)
-                srcip = ip.src
-                dstip = ip.dst
-                protocol = ip.proto
-
-                # ICMP
-                if protocol == in_proto.IPPROTO_ICMP:
-                    t = pkt.get_protocol(icmp.icmp)
-                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP,
-                                        ipv4_src=srcip, ipv4_dst=dstip,
-                                        ip_proto=protocol,
-                                        icmpv4_code=t.code,
-                                        icmpv4_type=t.type)
-                # TCP
-                elif protocol == in_proto.IPPROTO_TCP:
-                    t = pkt.get_protocol(tcp.tcp)
-                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP,
-                                        ipv4_src=srcip, ipv4_dst=dstip,
-                                        ip_proto=protocol,
-                                        tcp_src=t.src_port,
-                                        tcp_dst=t.dst_port)
-                # UDP
-                elif protocol == in_proto.IPPROTO_UDP:
-                    u = pkt.get_protocol(udp.udp)
-                    match = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP,
-                                            ipv4_src=srcip, ipv4_dst=dstip,
-                                            ip_proto=protocol,
-                                            udp_src=u.src_port,
-                                            udp_dst=u.dst_port)
-                
-                # Verify if packet has a valid buffer_id
-                if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                    self.add_flow(datapath, 1, match, actions, msg.buffer_id, idle=20, hard=100)
-                    return
-                else:
-                    self.add_flow(datapath, 1, match, actions, idle=20, hard=100)
-
+            match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
+            # verify if we have a valid buffer_id, if yes avoid to send both
+            # flow_mod & packet_out
+            if msg.buffer_id != ofproto.OFP_NO_BUFFER:
+                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                return
+            else:
+                self.add_flow(datapath, 1, match, actions)
         data = None
         if msg.buffer_id == ofproto.OFP_NO_BUFFER:
             data = msg.data
 
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
-                                in_port=in_port, actions=actions, data=data)
+                                  in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
