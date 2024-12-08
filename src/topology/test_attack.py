@@ -3,9 +3,9 @@ from mininet.net import Mininet
 from mininet.node import Controller, OVSKernelSwitch, RemoteController
 from mininet.cli import CLI
 from mininet.log import setLogLevel
-import time
+from time import sleep
 import os
-import random
+from random import choice, randrange
 
 class CustomTopo(Topo):
     def build(self):
@@ -32,36 +32,33 @@ class CustomTopo(Topo):
         self.addLink(s1, s2)
         self.addLink(s2, s3)
 
+def ip_generator():
+    """Generate a random IP in the network."""
+    return "10.1.1.{}".format(randrange(1,6))
+
 def simulate_attacks(net):
     hosts = [net.get('h1'), net.get('h2'), net.get('h3'), net.get('h4'), net.get('h5'), net.get('h6')]
 
-    attack_interval = 10
-    attack_types = ['syn', 'udp', 'icmp', 'http']
-    attack_duration = random.randint(10,60)
+    for _ in range(3): 
+        src = choice(hosts)
+        dst_ip = ip_generator()
+        print("Performing Ping Flood: Source={} -> Target={}".format(src.IP(), dst_ip))
+        src.cmd("ping -f -i 0.2 -c 1000 {} &".format(dst_ip))
+        sleep(50)  
 
-    for _ in range(int(attack_duration / attack_interval)):
-        attacker = random.choice(hosts) 
-        victim = random.choice([host.IP() for host in hosts if host != attacker]) 
-        attack_type = random.choice(attack_types) 
+    for _ in range(3):  
+        src = choice(hosts)
+        dst = choice(hosts)
+        if src != dst:  
+            print("Performing ICMP Flood with iperf: Source={src.IP()} -> Target={dst.IP()}")
+            dst.cmd("iperf -s > /dev/null 2>&1 &")  
+            src.cmd("iperf -c {} -u -b 100M -t 10 > /dev/null 2>&1 &".format(dst.IP()))
+            sleep(50) 
 
-        if attack_type == 'syn':
-            print(f"Starting SYN flood attack with {attacker.name} targeting {victim}...")
-            attacker.cmd(f'hping3 --flood -p 80 {victim} &')
-
-        elif attack_type == 'udp':
-            print(f"Starting UDP flood attack with {attacker.name} targeting {victim}...")
-            attacker.cmd(f'iperf -c {victim} -u -b 20M -t {attack_interval} &')
-
-        elif attack_type == 'icmp':
-            print(f"Starting ICMP flood attack with {attacker.name} targeting {victim}...")
-            attacker.cmd(f'hping3 --flood --icmp {victim} &')
-
-        time.sleep(attack_interval)
-
-    print("Stopping all the attacks...")
+    print("Stopping Network...")
     for host in hosts:
-        host.cmd('killall hping3')
-        host.cmd('killall iperf')
+        host.cmd('killall ping iperf')  # Stop all running ping and iperf commands
+    net.stop()
 
 def run_custom_topo():
     topo = CustomTopo()

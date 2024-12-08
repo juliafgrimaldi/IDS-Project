@@ -72,13 +72,15 @@ class TrafficMonitorSwitch(app_manager.RyuApp):
                           'packets', 'bytes', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            for stat in body:
+            for stat in sorted([flow for flow in body if flow.priority ==1], 
+                               key=lambda flow: (flow.match['in_port'],
+                                                 flow.match['eth_dst'])):
                 writer.writerow({
                     'time': timestamp,
                     'dpid': ev.msg.datapath.id,
-                    'in_port': stat.match.get('in_port', 'N/A'),
-                    'eth_src': stat.match.get('eth_src', 'N/A'),
-                    'eth_dst': stat.match.get('eth_dst', 'N/A'),
+                    'in_port': stat.match['in_port'],
+                    'eth_src': stat.match['eth_src'],
+                    'eth_dst': stat.match['eth_dst'],
                     'packets': stat.packet_count,
                     'bytes': stat.byte_count,
                     'duration_sec': stat.duration_sec,
@@ -90,7 +92,7 @@ class TrafficMonitorSwitch(app_manager.RyuApp):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-        
+
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match, instructions=inst)
@@ -142,6 +144,7 @@ class TrafficMonitorSwitch(app_manager.RyuApp):
 
         actions = [parser.OFPActionOutput(out_port)]
 
+        # Install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
             self.add_flow(datapath, 1, match, actions)
