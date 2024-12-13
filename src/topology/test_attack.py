@@ -50,7 +50,7 @@ def simulate_attacks(net):
         src = choice(hosts)
         dst = choice(hosts)
         if src != dst:  
-            print("Performing ICMP Flood with iperf: Source={src.IP()} -> Target={dst.IP()}")
+            print("Performing ICMP Flood with iperf: Source={} -> Target={}".format(src.IP(), dst.IP()))
             dst.cmd("iperf -s > /dev/null 2>&1 &")  
             src.cmd("iperf -c {} -u -b 100M -t 10 > /dev/null 2>&1 &".format(dst.IP()))
             sleep(50) 
@@ -58,7 +58,7 @@ def simulate_attacks(net):
     print("Stopping Network...")
     for host in hosts:
         host.cmd('killall ping iperf')  # Stop all running ping and iperf commands
-    net.stop()
+        net.stop()
 
 def run_custom_topo():
     topo = CustomTopo()
