@@ -30,7 +30,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
             with open(self.filename, 'w', newline='') as csvfile:
-                fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
+                fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
@@ -98,8 +98,7 @@ class TrafficMonitor(app_manager.RyuApp):
                 'eth_dst': stat.match['eth_dst'],
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
-                'duration_sec': stat.duration_sec,
-                'label': '0'
+                'duration_sec': stat.duration_sec
             })
 
     @set_ev_cls(event.EventSwitchEnter)
@@ -144,22 +143,30 @@ class TrafficMonitor(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
+        if ev.msg.msg_len < ev.msg.total_len:
+            self.logger.debug("packet truncated: only %s of %s bytes",
+                            ev.msg.msg_len, ev.msg.total_len)
+
         msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+        in_port = msg.match['in_port']
 
-        dpid = datapath.id
-        self.mac_to_port.setdefault(dpid, {})
 
         # analyse the received packets using the packet library.
         pkt = packet.Packet(msg.data)
         eth_pkt = pkt.get_protocols(ethernet.ethernet)[0]
+
+        # ignore LLDP packets
+        if eth_pkt.ethertype == ether_types.ETH_TYPE_LLDP:
+            return
+
         dst = eth_pkt.dst
         src = eth_pkt.src
 
-        # get the received port number from packet_in message.
-        in_port = msg.match['in_port']
+        dpid = format(datapath.id, "d").zfill(16)
+        self.mac_to_port.setdefault(dpid, {})
 
         self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
 
