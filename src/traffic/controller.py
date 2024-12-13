@@ -21,7 +21,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.datapaths = {}
         self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor)
-        self.train_file = 'train_traffic_stats.csv'
+        self.train_file = 'traffic_stats.csv'
         self.filename = 'traffic_status.csv'
         self.flow_model = None
         self._initialize_csv()
@@ -30,7 +30,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
             with open(self.filename, 'w', newline='') as csvfile:
-                fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec']
+                fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
@@ -86,19 +86,20 @@ class TrafficMonitor(app_manager.RyuApp):
         timestamp = time.time()
 
         with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'ip_src', 'tp_src', 'packets', 'bytes', 'ip_proto', 'duration_sec']
+            fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             for stat in body:
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'ip_src': stat.match['ipv4_src'],
-                'tp_src': stat.match['tcp_src'] if 'tcp_src' in stat.match else stat.match['udp_src']
+                'in_port': stat.match['in_port'],
+                'eth_src': stat.match['eth_src'],
+                'eth_dst': stat.match['eth_dst'],
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
-                'ip_proto': stat.match['ip_proto'],
-                'duration_sec': stat.duration_sec
+                'duration_sec': stat.duration_sec,
+                'label': '0'
             })
 
     @set_ev_cls(event.EventSwitchEnter)
@@ -177,12 +178,18 @@ class TrafficMonitor(app_manager.RyuApp):
 
         # install a flow on switches to avoid packet_in next time.
         if out_port != ofproto.OFPP_FLOOD:
-            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-            self.add_flow(datapath, 1, match, actions)
-            time.sleep(0.5)
-        # construct packet_out message and send it.
-        out = parser.OFPPacketOut(datapath=datapath,
-                                  buffer_id=ofproto.OFP_NO_BUFFER,
-                                  in_port=in_port, actions=actions,
-                                  data=msg.data)
+            match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
+            # verify if we have a valid buffer_id, if yes avoid to send both
+            # flow_mod & packet_out
+            if msg.buffer_id != ofproto.OFP_NO_BUFFER:
+                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                return
+            else:
+                self.add_flow(datapath, 1, match, actions)
+        data = None
+        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+            data = msg.data
+
+        out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
+                                  in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
