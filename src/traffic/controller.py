@@ -22,7 +22,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.mac_to_port = {}
         self.monitor_thread = hub.spawn(self._monitor)
         self.train_file = 'traffic_stats.csv'
-        self.filename = 'traffic_status.csv'
+        self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
         self.knn_training()
@@ -86,7 +86,7 @@ class TrafficMonitor(app_manager.RyuApp):
         timestamp = time.time()
 
         with open(self.filename, 'a', newline='') as csvfile:
-            fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec', 'label']
+            fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             for stat in body:
