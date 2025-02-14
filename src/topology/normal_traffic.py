@@ -33,7 +33,7 @@ class CustomTopo(Topo):
         self.addLink(s1, s2)
         self.addLink(s2, s3)
 
-def simulate_normal_traffic(net, duration=10, interval=3):
+def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
     h1 = net.get('h1')
     h2 = net.get('h2')
     h3 = net.get('h3')
@@ -43,7 +43,7 @@ def simulate_normal_traffic(net, duration=10, interval=3):
 
     hosts = [net.get('h{}'.format(i)) for i in range(1,7)]
     
-    for _ in range(interval):
+    for _ in range(interval * traffic_multiplier):
         src = choice(hosts)
         dst = choice(hosts)
 
@@ -62,7 +62,7 @@ def simulate_normal_traffic(net, duration=10, interval=3):
 
         elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
-            src.cmd('ping -c 4 {} &'.format(dst_ip)) 
+            src.cmd('ping -c 10 {} &'.format(dst_ip)) 
             time.sleep(2)
 
         elif traffic_type == 'curl':
@@ -78,11 +78,14 @@ def run_custom_topo():
     
     net.start()
 
-    print("Simulating normal traffic...")
-    simulate_normal_traffic(net)
+    print("Simulating traffic...")
+    simulate_traffic(net)
 
-    CLI(net)
+    print("Stopping all processes...")
+    for host in net.hosts:
+        host.cmd('killall iperf ping curl')
 
+    print("Stopping the network...")    
     net.stop()
     print("Network stopped")
 

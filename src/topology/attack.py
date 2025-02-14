@@ -3,10 +3,9 @@ from mininet.net import Mininet
 from mininet.node import Controller, OVSKernelSwitch, RemoteController
 from mininet.cli import CLI
 from mininet.log import setLogLevel
-import time
-import os
-import random
 from time import sleep
+import os
+from random import choice, randrange
 
 class CustomTopo(Topo):
     def build(self):
@@ -17,9 +16,9 @@ class CustomTopo(Topo):
         h5 = self.addHost('h5', ip='10.1.1.5/24', mac='00:00:00:00:00:05')
         h6 = self.addHost('h6', ip='10.1.1.6/24', mac='00:00:00:00:00:06')
 
-        s1 = self.addSwitch('s1', cls=OVSKernelSwitch, protocols='OpenFlow13')
-        s2 = self.addSwitch('s2', cls=OVSKernelSwitch, protocols='OpenFlow13')
-        s3 = self.addSwitch('s3', cls=OVSKernelSwitch, protocols='OpenFlow13')
+        s1 = self.addSwitch('s1', protocols='OpenFlow13')
+        s2 = self.addSwitch('s2', protocols='OpenFlow13')
+        s3 = self.addSwitch('s3', protocols='OpenFlow13')
 
         self.addLink(h1, s1)
         self.addLink(h2, s1)
@@ -33,56 +32,48 @@ class CustomTopo(Topo):
         self.addLink(s1, s2)
         self.addLink(s2, s3)
 
+def ip_generator():
+    """Generate a random IP in the network."""
+    return "10.1.1.{}".format(randrange(1,6))
+
 def simulate_attacks(net):
     hosts = [net.get('h1'), net.get('h2'), net.get('h3'), net.get('h4'), net.get('h5'), net.get('h6')]
 
-    attack_interval = 10
-    attack_types = ['syn', 'udp', 'icmp']
-    attack_duration = random.randint(10, 20)
+    for _ in range(3): 
+        src = choice(hosts)
+        dst_ip = ip_generator()
+        print("Performing Ping Flood: Source={} -> Target={}".format(src.IP(), dst_ip))
+        src.cmd("ping -f -i 1 -c 1000 {} &".format(dst_ip))
+        sleep(50)  
 
-    for _ in range(int(attack_duration / attack_interval)):
-        attacker = random.choice(hosts) 
-        victims = random.choice([host.IP() for host in hosts if host != attacker]) 
-        attack_type = random.choice(attack_types) 
+    for _ in range(3):  
+        src = choice(hosts)
+        dst = choice(hosts)
+        if src != dst:  
+            print("Performing ICMP Flood with iperf: Source={} -> Target={}".format(src.IP(), dst.IP()))
+            dst.cmd("iperf -s > /dev/null 2>&1 &")  
+            src.cmd("iperf -c {} -u -b 100M -t 10 > /dev/null 2>&1 &".format(dst.IP()))
+            sleep(50) 
 
-        if attack_type == 'syn':
-            for victim in victims:
-                print("Starting SYN flood attack with {} targeting {}...".format(attacker.name, victim))
-                attacker.cmd('hping3 --flood -S -V -d 120 -p 80 --rand-source {} &'.format(victim))
-                sleep(100)
-
-        elif attack_type == 'udp':
-            for victim in victims:
-                print("Starting UDP flood attack with {} targeting {}...".format(attacker.name, victim))
-                attacker.cmd('iperf -c {} -u -b 10M -t {} &'.format(victim, attack_interval))
-                sleep(100)
-
-        elif attack_type == 'icmp':
-            for victim in victims:
-                print("Starting ICMP flood attack with {} targeting {}...".format(attacker.name, victim))
-                attacker.cmd('hping3 --flood -1 -V -d 120 --rand-source {} &'.format(victim))
-                sleep(100)
-        
-
-    print("Stopping all the attacks...")
+    print("Stopping attacks...")
     for host in hosts:
-        host.cmd('killall hping3')
-        host.cmd('killall iperf')
+        host.cmd('killall ping iperf')  # Stop all running ping and iperf commands
+    sleep(2)
 
-    net.stop()
 def run_custom_topo():
     topo = CustomTopo()
     net = Mininet(topo=topo, controller=RemoteController, switch=OVSKernelSwitch)
-    
+
     net.start()
     print("Network started")
 
     simulate_attacks(net)
 
-    CLI(net)
-
+    print("Stopping the network...")
     net.stop()
     print("Attack network stopped")
+
+    os._exit(0)
 
 if __name__ == '__main__':
     os.environ['LANG'] = 'C'
