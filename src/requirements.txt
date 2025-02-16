@@ -1,9 +1,10 @@
-mininet==2.3.0
-ryu>=4.36.0
+mininet
+ryu
 tcpdump 
 iperf 
 hping3
-eventlet==0.30.2
+eventlet
 pandas
 numpy
 scikit-learn
+imbalanced-learn
