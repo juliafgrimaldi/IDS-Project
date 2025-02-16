@@ -55,15 +55,11 @@ def train_knn(file_path):
     X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
 
     # Treinar o modelo KNN com validação cruzada
-    knn_model = KNeighborsClassifier()
-    param_grid = {'n_neighbors': [3, 5, 7, 10]}
-    grid_search = GridSearchCV(knn_model, param_grid, cv=5, scoring='f1')
-    grid_search.fit(X_train, y_train)
-
-    best_knn_model = grid_search.best_estimator_
+    knn_model = KNeighborsClassifier(n_neighbors=5)
+    knn_model.fit(X_train, y_train)
 
     # Avaliação do modelo
-    y_pred_knn = best_knn_model.predict(X_test)
+    y_pred_knn = knn_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred_knn)
     print(f"K-NN Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred_knn))
