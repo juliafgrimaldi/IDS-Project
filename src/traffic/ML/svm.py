@@ -4,12 +4,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import SelectKBest, chi2
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
 from sklearn.metrics import classification_report, accuracy_score
+from imblearn.over_sampling import SMOTE
 import logging
 
-def train_knn(file_path):
+def train_svm(file_path):
     data = pd.read_csv(file_path)
+
+    if data.empty:
+            raise ValueError("O arquivo de treinamento está vazio.")
 
     # Limpar colunas com valores idênticos
     data = data.loc[:, (data != data.iloc[0]).any()]
@@ -40,26 +44,29 @@ def train_knn(file_path):
     
     data_combined = pd.concat([X[numeric_columns], data_encoded], axis=1)
 
+    # Aplicar SMOTE para balancear as classes
+    smote = SMOTE(random_state=42)
+    X_resampled, y_resampled = smote.fit_resample(data_combined, y)
 
-    X_train, X_test, y_train, y_test = train_test_split(data_combined, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
 
     # Seleção de Atributos
     selector = SelectKBest(chi2, k=min(10, X_train.shape[1]))
     X_train_selected = selector.fit_transform(X_train, y_train)
     X_test_selected = selector.transform(X_test)
 
-    knn_model = KNeighborsClassifier(n_neighbors=3)
-    knn_model.fit(X_train_selected, y_train)
+    svm_model = SVC(kernel='linear', random_state=42)
+    svm_model.fit(X_train_selected, y_train)
 
     # Avaliação do modelo
-    y_pred_knn = knn_model.predict(X_test_selected)
-    accuracy = accuracy_score(y_test, y_pred_knn)
-    print(f"K-NN Accuracy: {accuracy * 100:.2f}%")
-    print(classification_report(y_test, y_pred_knn))
+    y_pred_svm = svm_model.predict(X_test_selected)
+    accuracy = accuracy_score(y_test, y_pred_svm)
+    print(f"SVM Accuracy: {accuracy * 100:.2f}%")
+    print(classification_report(y_test, y_pred_svm))
 
-    return knn_model, selector, encoder, imputer, scaler
+    return svm_model, selector, encoder, imputer, scaler
 
-def predict_knn(model, selector, encoder, imputer, scaler, predict_file):
+def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)
     predict_flow_dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
 

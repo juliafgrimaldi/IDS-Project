@@ -12,6 +12,7 @@ from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
 import os
 from ML.knn import train_knn, predict_knn
+from ML.svm import train_svm, predict_svm
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -25,7 +26,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
-        self.knn_training()
+        self.svm_training()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -34,14 +35,14 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def knn_training(self):
-        self.logger.info("Treinando K-NN ...")
-        self.knn_model, self.selector, self.encoder, self.imputer, self.scaler = train_knn(self.train_file)
+    def svm_training(self):
+        self.logger.info("Treinando SVM ...")
+        self.svm_model, self.selector, self.encoder, self.imputer, self.scaler = train_svm(self.train_file)
 
-    def knn_predict(self):
+    def svm_predict(self):
         try:
-            self.logger.info("Predição com K-NN ...")
-            y_flow_pred = predict_knn(self.knn_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
+            self.logger.info("Predição com SVM ...")
+            y_flow_pred = predict_svm(self.svm_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
@@ -53,7 +54,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
-            self.logger.error(f"Erro na predição do KNN: {e}")
+            self.logger.error(f"Erro na predição do SVM: {e}")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
@@ -71,7 +72,7 @@ class TrafficMonitor(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             hub.sleep(10)
-            self.knn_predict()
+            self.svm_predict()
 
     def _request_stats(self, datapath):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
@@ -94,8 +95,8 @@ class TrafficMonitor(app_manager.RyuApp):
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
                 'in_port': stat.match.get('in_port', 'NULL'),
-                'eth_src': stat.match['eth_src'],
-                'eth_dst': stat.match['eth_dst'],
+                'eth_src': stat.match.get('eth_src', 'NULL'),
+                'eth_dst': stat.match.get('eth_dst', 'NULL'),
                 'packets': stat.packet_count,
                 'bytes': stat.byte_count,
                 'duration_sec': stat.duration_sec
