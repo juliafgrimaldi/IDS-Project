@@ -54,21 +54,21 @@ def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
         traffic_type = choice(['iperf', 'ping', 'curl'])  
 
         if traffic_type == 'iperf':
-            dst.cmd('iperf -s &')   
+            dst.cmd('iperf -s > /dev/null 2>&1 &')   
             print("Simulating traffic TCP between {} and {}".format(src.IP(), dst_ip))
-            src.cmd('iperf -c {} -t {} &'.format(dst_ip, duration))
+            src.cmd('iperf -c {} -t {} > /dev/null 2>&1 &'.format(dst_ip, duration))
             time.sleep(duration + 2)
             dst.cmd('killall iperf')
 
         elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
-            src.cmd('ping -c 10 {} &'.format(dst_ip)) 
-            time.sleep(2)
+            src.cmd('ping -c 5 {} &'.format(dst_ip)) 
+            time.sleep(5)
 
         elif traffic_type == 'curl':
             print("Simulating HTTP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('curl http://{} &'.format(dst_ip))
-            time.sleep(2)
+            time.sleep(5)
         
         time.sleep(1)
 

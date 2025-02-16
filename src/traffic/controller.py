@@ -93,7 +93,7 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer.writerow({
                 'time': timestamp,
                 'dpid': ev.msg.datapath.id,
-                'in_port': stat.match['in_port'],
+                'in_port': stat.match.get('in_port', 'NULL'),
                 'eth_src': stat.match['eth_src'],
                 'eth_dst': stat.match['eth_dst'],
                 'packets': stat.packet_count,
