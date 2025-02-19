@@ -38,7 +38,7 @@ def train_svm(file_path):
     X[numeric_columns] = scaler.fit_transform(X[numeric_columns])
 
     # Aplicar One-Hot Encoding às colunas categóricas (melhor estratégio)
-    encoder = OneHotEncoder(sparse=False, drop='first')  # drop='first' para evitar redundancias
+    encoder = OneHotEncoder(sparse=False, drop='first', handle_unknown='ignore')  # drop='first' para evitar redundancias
     data_encoded = pd.DataFrame(encoder.fit_transform(X[categorical_columns]),
                                 columns=encoder.get_feature_names_out(categorical_columns))
     
@@ -73,6 +73,9 @@ def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
     # Separar as colunas numéricas e categóricas
     numeric_columns = predict_flow_dataset.select_dtypes(include=[np.number]).columns
     categorical_columns = predict_flow_dataset.select_dtypes(exclude=[np.number]).columns
+
+    #P Preencher valores ausentes nas colunas categóricas
+    predict_flow_dataset[categorical_columns] = predict_flow_dataset[categorical_columns].fillna('unknown')
 
     # Preencher valores ausentes nas colunas numéricas
     predict_flow_dataset[numeric_columns] = imputer.transform(predict_flow_dataset[numeric_columns])

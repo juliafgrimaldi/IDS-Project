@@ -74,6 +74,9 @@ def predict_knn(model, selector, encoder, imputer, scaler, predict_file):
     numeric_columns = predict_flow_dataset.select_dtypes(include=[np.number]).columns
     categorical_columns = predict_flow_dataset.select_dtypes(exclude=[np.number]).columns
 
+    #P Preencher valores ausentes nas colunas categóricas
+    predict_flow_dataset[categorical_columns] = predict_flow_dataset[categorical_columns].fillna('unknown')
+
     # Preencher valores ausentes nas colunas numéricas
     predict_flow_dataset[numeric_columns] = imputer.transform(predict_flow_dataset[numeric_columns].values)
 
