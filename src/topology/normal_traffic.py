@@ -63,12 +63,12 @@ def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
         elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
             src.cmd('ping -c 5 {} &'.format(dst_ip)) 
-            time.sleep(5)
+            time.sleep(10)
 
         elif traffic_type == 'curl':
             print("Simulating HTTP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('curl http://{} &'.format(dst_ip))
-            time.sleep(5)
+            time.sleep(10)
         
         time.sleep(1)
 

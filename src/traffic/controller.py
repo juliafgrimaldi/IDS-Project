@@ -26,7 +26,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
-        self.knn_training()
+        self.svm_training()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -35,14 +35,14 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def knn_training(self):
-        self.logger.info("Treinando KNN ...")
-        self.knn_model, self.selector, self.encoder, self.imputer, self.scaler = train_knn(self.train_file)
+    def svm_training(self):
+        self.logger.info("Treinando SVM ...")
+        self.svm_model, self.selector, self.encoder, self.imputer, self.scaler = train_svm(self.train_file)
 
-    def knn_predict(self):
+    def svm_predict(self):
         try:
-            self.logger.info("Predição com KNN ...")
-            y_flow_pred = predict_knn(self.knn_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
+            self.logger.info("Predição com SVM ...")
+            y_flow_pred = predict_svm(self.svm_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
@@ -54,7 +54,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
-            self.logger.error(f"Erro na predição do KNN: {e}")
+            self.logger.error(f"Erro na predição do SVM: {e}")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
@@ -72,7 +72,7 @@ class TrafficMonitor(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             hub.sleep(10)
-            self.knn_predict()
+            self.svm_predict()
 
     def _request_stats(self, datapath):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
