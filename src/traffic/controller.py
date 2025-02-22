@@ -37,12 +37,12 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def knn_training(self):
         self.logger.info("Treinando KNN ...")
-        self.svm_model, self.selector, self.encoder, self.imputer, self.scaler = train_svm(self.train_file)
+        self.knn_model, self.selector, self.encoder, self.imputer, self.scaler = train_knn(self.train_file)
 
     def knn_predict(self):
         try:
             self.logger.info("Predição com KNN ...")
-            y_flow_pred = predict_svm(self.svm_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
+            y_flow_pred = predict_knn(self.knn_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
@@ -54,7 +54,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
-            self.logger.error(f"Erro na predição do SVM: {e}")
+            self.logger.error(f"Erro na predição do KNN: {e}")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):

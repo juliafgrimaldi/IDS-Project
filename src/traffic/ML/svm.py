@@ -51,7 +51,7 @@ def train_svm(file_path):
 
 
     # Seleção de Atributos
-    selector = SelectKBest(chi2, k=min(10, X_train.shape[1]))
+    selector = SelectKBest(chi2, k=min(10, X_resampled.shape[1]))
     X_selected = selector.fit_transform(X_resampled, y_resampled)
 
     X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
