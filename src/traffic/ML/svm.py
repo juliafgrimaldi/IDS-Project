@@ -6,6 +6,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, accuracy_score
+from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
 
@@ -48,23 +49,33 @@ def train_svm(file_path):
     smote = SMOTE(random_state=42)
     X_resampled, y_resampled = smote.fit_resample(data_combined, y)
 
-    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
 
     # Seleção de Atributos
     selector = SelectKBest(chi2, k=min(10, X_train.shape[1]))
-    X_train_selected = selector.fit_transform(X_train, y_train)
-    X_test_selected = selector.transform(X_test)
+    X_selected = selector.fit_transform(X_resampled, y_resampled)
 
-    svm_model = SVC(kernel='linear', random_state=42)
-    svm_model.fit(X_train_selected, y_train)
+    X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
+
+    param_grid = {
+            'C': [0.1, 1, 10, 100],  # Penalidade para erros de classificação
+            'kernel': ['linear', 'rbf'],  # Tipos de kernel
+            'gamma': ['scale', 'auto']  # Parâmetro gamma para o kernel rbf
+        }
+    
+    svm_model = SVC(random_state=42)
+
+    grid_search = GridSearchCV(svm_model, param_grid, cv=5, scoring='accuracy')
+    grid_search.fit(X_train, y_train)
+
+    best_svm_model = grid_search.best_estimator_
 
     # Avaliação do modelo
-    y_pred_svm = svm_model.predict(X_test_selected)
+    y_pred_svm = best_svm_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred_svm)
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred_svm))
 
-    return svm_model, selector, encoder, imputer, scaler
+    return best_svm_model, selector, encoder, imputer, scaler
 
 def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)

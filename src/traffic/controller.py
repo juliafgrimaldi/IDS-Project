@@ -26,7 +26,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
-        self.svm_training()
+        self.knn_training()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -35,13 +35,13 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def svm_training(self):
-        self.logger.info("Treinando SVM ...")
+    def knn_training(self):
+        self.logger.info("Treinando KNN ...")
         self.svm_model, self.selector, self.encoder, self.imputer, self.scaler = train_svm(self.train_file)
 
-    def svm_predict(self):
+    def knn_predict(self):
         try:
-            self.logger.info("Predição com SVM ...")
+            self.logger.info("Predição com KNN ...")
             y_flow_pred = predict_svm(self.svm_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
@@ -72,7 +72,7 @@ class TrafficMonitor(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             hub.sleep(10)
-            self.svm_predict()
+            self.knn_predict()
 
     def _request_stats(self, datapath):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
