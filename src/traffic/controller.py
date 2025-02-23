@@ -15,6 +15,7 @@ from ML.knn import train_knn, predict_knn
 from ML.svm import train_svm, predict_svm
 from ML.decisiontree import train_decision_tree, predict_decision_tree
 from ML.naivebayes import train_naive_bayes, predict_naive_bayes
+from ML.randomforest import train_random_forest, predict_random_forest
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -28,7 +29,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
-        self.naive_bayes_training()
+        self.random_forest_training()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -37,14 +38,14 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def naive_bayes_training(self):
-        self.logger.info("Treinando Naive Bayes ...")
-        self.naivebayes_model, self.selector, self.encoder, self.imputer, self.scaler = train_naive_bayes(self.train_file)
+    def random_forest_training(self):
+        self.logger.info("Treinando Random Forest ...")
+        self.randomforest_model, self.selector, self.encoder, self.imputer, self.scaler = train_random_forest(self.train_file)
 
-    def naive_bayes_predict(self):
+    def random_forest_predict(self):
         try:
-            self.logger.info("Predição com Naive Bayes ...")
-            y_flow_pred = predict_naive_bayes(self.naivebayes_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
+            self.logger.info("Predição com Random Forest...")
+            y_flow_pred = predict_random_forest(self.randomforest_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
@@ -56,7 +57,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
-            self.logger.error(f"Erro na predição do Naive Bayes: {e}")
+            self.logger.error(f"Erro na predição do Random Forest: {e}")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
@@ -74,7 +75,7 @@ class TrafficMonitor(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             hub.sleep(10)
-            self.naive_bayes_predict()
+            self.random_forest_predict()
 
     def _request_stats(self, datapath):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
