@@ -56,16 +56,23 @@ def train_naive_bayes(file_path):
 
     X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
 
+    param_grid = {
+        'var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
+    }
+
     nb_model = GaussianNB()
-    nb_model.fit(X_train, y_train)
+    grid_search = GridSearchCV(estimator=nb_model, param_grid=param_grid, cv=5, scoring='accuracy')
+    grid_search.fit(X_train, y_train)
+
+    best_nb_model = grid_search.best_estimator_
 
     # Avaliação do modelo
-    y_pred = nb_model.predict(X_test)
+    y_pred = best_nb_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Naive Bayes Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred))
 
-    return nb_model, selector, encoder, imputer, scaler
+    return best_nb_model, selector, encoder, imputer, scaler
 
 def predict_naive_bayes(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)

@@ -28,7 +28,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
-        self.decisiontree_training()
+        self.naive_bayes_training()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -37,14 +37,14 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def decisiontree_training(self):
-        self.logger.info("Treinando Decision Tree ...")
-        self.decisiontree_model, self.selector, self.encoder, self.imputer, self.scaler = train_decision_tree(self.train_file)
+    def naive_bayes_training(self):
+        self.logger.info("Treinando Naive Bayes ...")
+        self.naivebayes_model, self.selector, self.encoder, self.imputer, self.scaler = train_naive_bayes(self.train_file)
 
-    def decisiontree_predict(self):
+    def naive_bayes_predict(self):
         try:
-            self.logger.info("Predição com Decision Tree ...")
-            y_flow_pred = predict_decision_tree(self.decisiontree_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
+            self.logger.info("Predição com Naive Bayes ...")
+            y_flow_pred = predict_naive_bayes(self.naivebayes_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
@@ -56,7 +56,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
-            self.logger.error(f"Erro na predição do Decision Tree: {e}")
+            self.logger.error(f"Erro na predição do Naive Bayes: {e}")
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
@@ -74,7 +74,7 @@ class TrafficMonitor(app_manager.RyuApp):
             for dp in self.datapaths.values():
                 self._request_stats(dp)
             hub.sleep(10)
-            self.decisiontree_predict()
+            self.naive_bayes_predict()
 
     def _request_stats(self, datapath):
         self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
