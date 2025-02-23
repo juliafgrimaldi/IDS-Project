@@ -55,29 +55,15 @@ def train_random_forest(file_path):
 
     X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
 
-    # Definir os parâmetros para o Grid Search
-    param_grid = {
-        'n_estimators': [50, 100, 200],  # n de árvores
-        'max_depth': [None, 10, 20, 30],  # Profundidade
-        'min_samples_split': [2, 5, 10],  # N mínimo de amostras para dividir um nó
-        'min_samples_leaf': [1, 2, 4],  # N de amostras em uma folha
-        'bootstrap': [True, False]  # Se deve usar amostragem bootstrap
-    }
-
     rf_model = RandomForestClassifier(random_state=42)
+    rf_model.fit(X_train, y_train)
 
-    grid_search = GridSearchCV(estimator=rf_model, param_grid=param_grid, cv=5, scoring='accuracy')
-
-    grid_search.fit(X_train, y_train)
-
-    best_rf_model = grid_search.best_estimator_
-
-    y_pred = best_rf_model.predict(X_test)
+    y_pred = rf_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Random Forest Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred))
 
-    return best_rf_model, selector, encoder, imputer, scaler
+    return rf_model, selector, encoder, imputer, scaler
 
 def predict_random_forest(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)
