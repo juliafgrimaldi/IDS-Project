@@ -60,15 +60,12 @@ class TrafficMonitor(app_manager.RyuApp):
             self.logger.error(f"Erro na predição do Random Forest: {e}")
 
     # Pré-filtros
-    def is_broadcast(self, eth_dst):
-        """Verifica se o endereço MAC de destino é broadcast."""
-        return eth_dst.lower() == "ff:ff:ff:ff:ff:ff"
     
     def is_high_volume(self, packets, bytes, duration_sec):
         """Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo."""
         packets_per_sec = packets / duration_sec if duration_sec > 0 else 0
         bytes_per_sec = bytes / duration_sec if duration_sec > 0 else 0
-        return packets_per_sec > 1000 or bytes_per_sec > 1000000 
+        return packets_per_sec > 10000 or bytes_per_sec > 100000000
 
     def is_long_connection(self, duration_sec):
         """Verifica se a conexão é muito longa."""
@@ -78,7 +75,7 @@ class TrafficMonitor(app_manager.RyuApp):
         """Verifica se o endereço MAC é inválido ou tem padrões repetitivos."""
         invalid_patterns = [
             r"00:00:00:00:00:00",  # MAC inválido
-            r"([0-9A-Fa-f]{2}:)\1{5}"  # Padrões repetitivos (ex: 11:11:11:11:11:11)
+            r"([0-9A-Fa-f]{2}:)\1{5}"  # Padrões repetitivos
         ]
         for pattern in invalid_patterns:
             if re.match(pattern, mac, re.IGNORECASE):
@@ -131,16 +128,20 @@ class TrafficMonitor(app_manager.RyuApp):
             for stat in body:
                 eth_dst = stat.match.get('eth_dst', 'NULL')
                 eth_src = stat.match.get('eth_src', 'NULL')
+                in_port = stat.match.get('in_port', 'NULL')
                 packets = stat.packet_count
                 bytes = stat.byte_count
                 duration_sec = stat.duration_sec
 
 
-                if (self.is_broadcast(eth_dst) or
+                if (
                     self.is_high_volume(packets, bytes, duration_sec) or
                     self.is_long_connection(duration_sec) or
                     self.is_invalid_mac(eth_src) or
                     self.is_invalid_mac(eth_dst)):
+
+                    self.block_traffic(ev.msg.datapath, eth_src, eth_dst, in_port)
+
                     self.logger.warning(f"Tráfego suspeito detectado e bloqueado: "
                                        f"eth_src={eth_src}, eth_dst={eth_dst}, "
                                        f"packets={packets}, bytes={bytes}, duration_sec={duration_sec}")
