@@ -84,6 +84,15 @@ class TrafficMonitor(app_manager.RyuApp):
             if re.match(pattern, mac, re.IGNORECASE):
                 return True
         return False
+    
+    def block_traffic(self, datapath, eth_src, eth_dst, in_port):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        # Cria uma regra de fluxo para descartar pacotes
+        match = parser.OFPMatch(in_port=in_port, eth_src=eth_src, eth_dst=eth_dst)
+        actions = []  # Nenhuma ação (descartar pacotes, n sao encaminhados)
+        self.add_flow(datapath, 100, match, actions, idle=60, hard=120) 
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
