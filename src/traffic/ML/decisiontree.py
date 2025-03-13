@@ -65,7 +65,7 @@ def train_decision_tree(file_path):
     print(f"Decision Tree Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred))
 
-    return dt_model, selector, encoder, imputer, scaler
+    return dt_model, selector, encoder, imputer, scaler, accuracy
 
 def predict_decision_tree(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)

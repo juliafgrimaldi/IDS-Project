@@ -75,7 +75,7 @@ def train_svm(file_path):
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred_svm))
 
-    return best_svm_model, selector, encoder, imputer, scaler
+    return best_svm_model, selector, encoder, imputer, scaler, accuracy
 
 def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)

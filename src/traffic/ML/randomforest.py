@@ -63,7 +63,7 @@ def train_random_forest(file_path):
     print(f"Random Forest Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred))
 
-    return rf_model, selector, encoder, imputer, scaler
+    return rf_model, selector, encoder, imputer, scaler, accuracy
 
 def predict_random_forest(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)

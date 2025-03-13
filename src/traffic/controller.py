@@ -29,7 +29,9 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.flow_model = None
         self._initialize_csv()
-        self.random_forest_training()
+        self.models = {}
+        self.accuracies = {}
+        self._train_models()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -38,28 +40,58 @@ class TrafficMonitor(app_manager.RyuApp):
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def random_forest_training(self):
-        self.logger.info("Treinando Random Forest ...")
-        self.randomforest_model, self.selector, self.encoder, self.imputer, self.scaler = train_random_forest(self.train_file)
+    def _train_models(self):
+        self.logger.info("Treinando todos os modelos...")
+        self.models['decision_tree'], self.accuracies['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler = train_decision_tree(self.train_file)
+        self.models['knn'], self.accuracies['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler = train_knn(self.train_file)
+        self.models['naive_bayes'], self.accuracies['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler = train_naive_bayes(self.train_file)
+        self.models['random_forest'], self.accuracies['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler = train_random_forest(self.train_file)
+        self.models['svm'], self.accuracies['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler = train_svm(self.train_file)
 
-    def random_forest_predict(self):
+    def predict_all_models(self, data):
+        predictions = {}
+        predictions['decision_tree'] = predict_decision_tree(self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, data)
+        predictions['knn'] = predict_knn(self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, data)
+        predictions['naive_bayes'] = predict_naive_bayes(self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, data)
+        predictions['random_forest'] = predict_random_forest(self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, data)
+        predictions['svm'] = predict_svm(self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, data)
+        return predictions
+
+
+    def weighted_vote(self, predictions):
+        weighted_votes = {}
+        for model_name, pred in predictions.items():
+            weight = self.accuracies[model_name] 
+            for i, p in enumerate(pred):
+                if i not in weighted_votes:
+                    weighted_votes[i] = 0
+                weighted_votes[i] += p * weight  
+        
+        final_predictions = []
+        for i in weighted_votes:
+            final_predictions.append(1 if weighted_votes[i] > 0.5 else 0)  # Decisão final
+        
+        return final_predictions
+    
+    def predict_traffic(self):
         try:
-            self.logger.info("Predição com Random Forest...")
-            y_flow_pred = predict_random_forest(self.randomforest_model, self.selector, self.encoder, self.imputer, self.scaler, self.filename)
+            self.logger.info("Predição com todos os modelos...")
+            predictions = self.predict_all_models(self.filename)  
+            final_predictions = self.weighted_vote(predictions) 
+        
 
             legitimate_traffic = 0
             ddos_traffic = 0
-            for pred in y_flow_pred:
+            for pred in final_predictions:  
                 if pred == 0:
-                    legitimate_traffic += 1
+                    legitimate_traffic += 1  
                 else:
-                    ddos_traffic += 1
-
+                    ddos_traffic += 1  
+        
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
-            self.logger.error(f"Erro na predição do Random Forest: {e}")
-
-    # Pré-filtros
+            self.logger.error(f"Erro na predição: {e}")
+    
     
     def is_high_volume(self, packets, bytes, duration_sec):
         """Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo."""
