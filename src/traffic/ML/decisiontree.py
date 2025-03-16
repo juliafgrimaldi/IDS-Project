@@ -1,14 +1,13 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
-from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, accuracy_score
 from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
+import os
+from .preprocessing import preprocess_data
 
 def train_decision_tree(file_path):
     data = pd.read_csv(file_path)
@@ -16,45 +15,13 @@ def train_decision_tree(file_path):
     if data.empty:
             raise ValueError("O arquivo de treinamento está vazio.")
 
-    # Limpar colunas com valores idênticos
-    data = data.loc[:, (data != data.iloc[0]).any()]
-
-    # Tratar valores infinitos, substituindo por NaN e preenchendo com a média
-    data.replace([np.inf, -np.inf], np.nan, inplace=True)
-
-     # Separar features e label
-    X = data.drop('label', axis=1) 
-    y = data['label']
-
-    # Identificar colunas numéricas e categóricas (não numéricas)
-    numeric_columns = X.select_dtypes(include=[np.number]).columns
-    categorical_columns = X.select_dtypes(exclude=[np.number]).columns
-
-    # Preencher valores ausentes (colunas numéricas)
-    imputer = SimpleImputer(strategy='mean')
-    X[numeric_columns] = imputer.fit_transform(X[numeric_columns])
-
-    # Normalizar os dados com minmax (colunas numéricas)
-    scaler = MinMaxScaler()
-    X[numeric_columns] = scaler.fit_transform(X[numeric_columns])
-
-    # Aplicar One-Hot Encoding às colunas categóricas (melhor estratégio)
-    encoder = OneHotEncoder(sparse=False, drop='first', handle_unknown='ignore')  # drop='first' para evitar redundancias
-    data_encoded = pd.DataFrame(encoder.fit_transform(X[categorical_columns]),
-                                columns=encoder.get_feature_names_out(categorical_columns))
-    
-    data_combined = pd.concat([X[numeric_columns], data_encoded], axis=1)
+    X, y, imputer, scaler, encoder, selector = preprocess_data(data)
 
     # Aplicar SMOTE para balancear as classes
     smote = SMOTE(random_state=42)
-    X_resampled, y_resampled = smote.fit_resample(data_combined, y)
+    X_resampled, y_resampled = smote.fit_resample(X, y)
 
-
-    # Seleção de Atributos
-    selector = SelectKBest(chi2, k=min(10, X_resampled.shape[1]))
-    X_selected = selector.fit_transform(X_resampled, y_resampled)
-
-    X_train, X_test, y_train, y_test = train_test_split(X_selected, y_resampled, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
 
     dt_model = DecisionTreeClassifier(random_state=42)
     dt_model.fit(X_train, y_train)

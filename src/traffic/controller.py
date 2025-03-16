@@ -10,7 +10,12 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet, ether_types
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import SelectKBest, chi2
 import os
+import numpy as np
+import pandas as pd
 from ML.knn import train_knn, predict_knn
 from ML.svm import train_svm, predict_svm
 from ML.decisiontree import train_decision_tree, predict_decision_tree
@@ -56,7 +61,6 @@ class TrafficMonitor(app_manager.RyuApp):
         predictions['random_forest'] = predict_random_forest(self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, data)
         predictions['svm'] = predict_svm(self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, data)
         return predictions
-
 
     def weighted_vote(self, predictions):
         weighted_votes = {}
