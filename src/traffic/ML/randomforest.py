@@ -36,6 +36,10 @@ def train_random_forest(file_path):
 
 def predict_random_forest(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset = pd.read_csv(predict_file)
+
+    if predict_flow_dataset.empty:
+            raise ValueError("O arquivo de predição está vazio.")
+    
     predict_flow_dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     # Separar as colunas numéricas e categóricas
