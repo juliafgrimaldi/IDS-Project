@@ -47,11 +47,11 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _train_models(self):
         self.logger.info("Treinando todos os modelos...")
-        self.models['decision_tree'], self.accuracies['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler = train_decision_tree(self.train_file)
-        self.models['knn'], self.accuracies['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler = train_knn(self.train_file)
-        self.models['naive_bayes'], self.accuracies['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler = train_naive_bayes(self.train_file)
-        self.models['random_forest'], self.accuracies['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler = train_random_forest(self.train_file)
-        self.models['svm'], self.accuracies['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler = train_svm(self.train_file)
+        self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, self.accuracies['decision_tree'] = train_decision_tree(self.train_file)
+        self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, self.accuracies['knn'] = train_knn(self.train_file)
+        self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, self.accuracies['naive_bayes'] = train_naive_bayes(self.train_file)
+        self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, self.accuracies['random_forest'] = train_random_forest(self.train_file)
+        self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, self.accuracies['svm'] = train_svm(self.train_file)
 
     def predict_all_models(self, data):
         predictions = {}
