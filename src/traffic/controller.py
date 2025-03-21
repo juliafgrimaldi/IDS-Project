@@ -96,19 +96,18 @@ class TrafficMonitor(app_manager.RyuApp):
         except Exception as e:
             self.logger.error(f"Erro na predição: {e}")
     
-    
+    # Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo.
     def is_high_volume(self, packets, bytes, duration_sec):
-        """Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo."""
         packets_per_sec = packets / duration_sec if duration_sec > 0 else 0
         bytes_per_sec = bytes / duration_sec if duration_sec > 0 else 0
         return packets_per_sec > 10000 or bytes_per_sec > 100000000
 
+    # Verifica se a conexão é muito longa.
     def is_long_connection(self, duration_sec):
-        """Verifica se a conexão é muito longa."""
         return duration_sec > 3600  
 
+    # Verifica se o endereço MAC é inválido ou tem padrões repetitivos.
     def is_invalid_mac(self, mac):
-        """Verifica se o endereço MAC é inválido ou tem padrões repetitivos."""
         invalid_patterns = [
             r"00:00:00:00:00:00",  # MAC inválido
             r"([0-9A-Fa-f]{2}:)\1{5}"  # Padrões repetitivos

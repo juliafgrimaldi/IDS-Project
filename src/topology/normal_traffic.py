@@ -57,12 +57,12 @@ def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
             dst.cmd('iperf -s > /dev/null 2>&1 &')   
             print("Simulating traffic TCP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('iperf -c {} -t {} > /dev/null 2>&1 &'.format(dst_ip, duration))
-            time.sleep(duration + 2)
+            time.sleep(duration)
             dst.cmd('killall iperf')
 
         elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
-            src.cmd('ping -c 3 -i 1 {} &'.format(dst_ip)) 
+            src.cmd('ping {} &'.format(dst_ip)) 
             time.sleep(10)
 
         elif traffic_type == 'curl':
