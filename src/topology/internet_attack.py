@@ -58,11 +58,11 @@ def simulate_attacks(net):
         sleep(30)
 
 
-    print("Stopping attacks...")
-    for host in hosts:
-        host.cmd('killall ping iperf')  # Stop all running ping and iperf commands
-    internet_host.cmd('killall ping iperf')
-    sleep(2)
+    #print("Stopping attacks...")
+    #for host in hosts:
+    #    host.cmd('killall ping iperf')  # Stop all running ping and iperf commands
+    #internet_host.cmd('killall ping iperf')
+    #sleep(2)
 
 def run_custom_topo():
     topo = CustomTopo()

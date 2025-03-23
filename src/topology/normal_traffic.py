@@ -33,7 +33,7 @@ class CustomTopo(Topo):
         self.addLink(s1, s2)
         self.addLink(s2, s3)
 
-def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
+def simulate_traffic(net, duration=10, interval=5):
     h1 = net.get('h1')
     h2 = net.get('h2')
     h3 = net.get('h3')
@@ -43,7 +43,7 @@ def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
 
     hosts = [net.get('h{}'.format(i)) for i in range(1,7)]
     
-    for _ in range(interval * traffic_multiplier):
+    for _ in range(interval):
         src = choice(hosts)
         dst = choice(hosts)
 
@@ -57,18 +57,18 @@ def simulate_traffic(net, duration=10, interval=5, traffic_multiplier=2):
             dst.cmd('iperf -s > /dev/null 2>&1 &')   
             print("Simulating traffic TCP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('iperf -c {} -t {} > /dev/null 2>&1 &'.format(dst_ip, duration))
-            time.sleep(duration)
+            time.sleep(20)
             dst.cmd('killall iperf')
 
         elif traffic_type == 'ping':
             print("Simulating ICMP traffic (ping) between {} and {}".format(src.IP(), dst_ip))
             src.cmd('ping {} &'.format(dst_ip)) 
-            time.sleep(10)
+            time.sleep(20)
 
         elif traffic_type == 'curl':
             print("Simulating HTTP between {} and {}".format(src.IP(), dst_ip))
             src.cmd('curl http://{} &'.format(dst_ip))
-            time.sleep(10)
+            time.sleep(20)
         
         time.sleep(1)
 
