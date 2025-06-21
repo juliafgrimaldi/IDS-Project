@@ -23,7 +23,7 @@ def train_decision_tree(file_path):
 
     X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
 
-    dt_model = DecisionTreeClassifier(random_state=42)
+    dt_model = DecisionTreeClassifier(random_state=42, max_depth=10, min_samples_split=10, min_samples_leaf=5)
     dt_model.fit(X_train, y_train)
 
     # Avaliação do modelo
