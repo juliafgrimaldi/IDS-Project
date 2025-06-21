@@ -40,4 +40,4 @@ def preprocess_data(data):
     selector = SelectKBest(chi2, k=min(10, X_processed.shape[1]))
     X_selected = selector.fit_transform(X_processed, y)
 
-    return X_selected, y, imputer, scaler, encoder, selector
+    return X_selected, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns

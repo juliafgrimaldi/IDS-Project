@@ -36,6 +36,8 @@ class TrafficMonitor(app_manager.RyuApp):
         self._initialize_csv()
         self.models = {}
         self.accuracies = {}
+        self.numeric_columns = ['packets', 'bytes', 'duration_sec']
+        self.categorical_columns = ['dpid', 'in_port', 'eth_src', 'eth_dst']
         self._train_models()
 
     def _initialize_csv(self):
@@ -47,20 +49,20 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _train_models(self):
         self.logger.info("Treinando todos os modelos...")
-        self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, self.accuracies['decision_tree'] = train_decision_tree(self.train_file)
-        self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, self.accuracies['knn'] = train_knn(self.train_file)
-        self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, self.accuracies['naive_bayes'] = train_naive_bayes(self.train_file)
-        self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, self.accuracies['random_forest'] = train_random_forest(self.train_file)
-        self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, self.accuracies['svm'] = train_svm(self.train_file)
+        self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, self.accuracies['decision_tree'], self.numeric_columns, self.categorical_columns= train_decision_tree(self.train_file)
+        self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, self.accuracies['knn'], self.numeric_columns, self.categorical_columns = train_knn(self.train_file)
+        self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, self.accuracies['naive_bayes'], self.numeric_columns, self.categorical_columns = train_naive_bayes(self.train_file)
+        self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, self.accuracies['random_forest'], self.numeric_columns, self.categorical_columns = train_random_forest(self.train_file)
+        self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, self.accuracies['svm'], self.numeric_columns, self.categorical_columns = train_svm(self.train_file)
 
     def predict_all_models(self, data): 
         predictions = {}
         ddos_flows = {}
-        predictions['decision_tree'], ddos_flows['decision_tree'] = predict_decision_tree(self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, data)
-        predictions['knn'], ddos_flows['knn']= predict_knn(self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, data)
-        predictions['naive_bayes'], ddos_flows['naive_bayes'] = predict_naive_bayes(self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, data)
-        predictions['random_forest'], ddos_flows['random_forest'] = predict_random_forest(self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, data)
-        predictions['svm'], ddos_flows['svm'] = predict_svm(self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, data)
+        predictions['decision_tree'], ddos_flows['decision_tree'] = predict_decision_tree(self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, data, self.numeric_columns, self.categorical_columns)
+        predictions['knn'], ddos_flows['knn']= predict_knn(self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, data, self.numeric_columns, self.categorical_columns)
+        predictions['naive_bayes'], ddos_flows['naive_bayes'] = predict_naive_bayes(self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, data, self.numeric_columns, self.categorical_columns)
+        predictions['random_forest'], ddos_flows['random_forest'] = predict_random_forest(self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, data, self.numeric_columns, self.categorical_columns)
+        predictions['svm'], ddos_flows['svm'] = predict_svm(self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, data, self.numeric_columns, self.categorical_columns)
         return predictions, ddos_flows
 
     def weighted_vote(self, predictions):
@@ -81,7 +83,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def predict_traffic(self):
         try:
             self.logger.info("Predição com todos os modelos...")
-            predictions = self.predict_all_models(self.filename)  
+            predictions, _ = self.predict_all_models(self.filename)  
             final_predictions = self.weighted_vote(predictions) 
         
             df = pd.read_csv(self.filename)

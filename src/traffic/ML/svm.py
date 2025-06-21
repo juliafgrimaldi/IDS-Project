@@ -15,7 +15,7 @@ def train_svm(file_path):
     if data.empty:
             raise ValueError("O arquivo de treinamento está vazio.")
 
-    X, y, imputer, scaler, encoder, selector = preprocess_data(data)
+    X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
 
     # Aplicar SMOTE para balancear as classes
     smote = SMOTE(random_state=42)
@@ -42,9 +42,9 @@ def train_svm(file_path):
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred_svm))
 
-    return best_svm_model, selector, encoder, imputer, scaler, accuracy
+    return best_svm_model, selector, encoder, imputer, scaler, accuracy, numeric_columns, categorical_columns
 
-def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
+def predict_svm(model, selector, encoder, imputer, scaler, predict_file, numeric_columns, categorical_columns):
     predict_flow_dataset = pd.read_csv(predict_file)
 
     if predict_flow_dataset.empty:
@@ -53,8 +53,8 @@ def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
     predict_flow_dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     # Separar as colunas numéricas e categóricas
-    numeric_columns = predict_flow_dataset.select_dtypes(include=[np.number]).columns
-    categorical_columns = predict_flow_dataset.select_dtypes(exclude=[np.number]).columns
+    #numeric_columns = predict_flow_dataset.select_dtypes(include=[np.number]).columns
+    #categorical_columns = predict_flow_dataset.select_dtypes(exclude=[np.number]).columns
 
     #P Preencher valores ausentes nas colunas categóricas
     predict_flow_dataset[categorical_columns] = predict_flow_dataset[categorical_columns].fillna('unknown')
