@@ -76,4 +76,8 @@ def predict_svm(model, selector, encoder, imputer, scaler, predict_file):
 
     y_pred = model.predict(X_predict_selected)
 
-    return y_pred
+    predict_flow_dataset['prediction'] = y_pred
+    
+    ddos_flows = predict_flow_dataset[predict_flow_dataset['prediction'] == 1]
+    
+    return y_pred, ddos_flows
