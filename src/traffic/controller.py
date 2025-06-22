@@ -39,6 +39,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.numeric_columns = ['packets', 'bytes', 'duration_sec']
         self.categorical_columns = ['dpid', 'in_port', 'eth_src', 'eth_dst']
         self._train_models()
+        self.blocked_flows = set()
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -83,18 +84,32 @@ class TrafficMonitor(app_manager.RyuApp):
     def predict_traffic(self):
         try:
             self.logger.info("Predição com todos os modelos...")
-            predictions, _ = self.predict_all_models(self.filename)  
+            predictions, features = self.predict_all_models(self.filename)  
             final_predictions = self.weighted_vote(predictions) 
         
             df = pd.read_csv(self.filename)
 
             legitimate_traffic = 0
             ddos_traffic = 0
-            for pred in final_predictions:  
+            for i, pred in enumerate(final_predictions):  
                 if pred == 0:
                     legitimate_traffic += 1  
                 else:
-                    ddos_traffic += 1  
+                    ddos_traffic += 1
+                    eth_src = df.iloc[i]['eth_src']
+                    eth_dst = df.iloc[i]['eth_dst']
+                    in_port = df.iloc[i]['in_port']
+                    dpid = df.iloc[i]['dpid']
+                    flow_id = (eth_src, eth_dst, dpid)  
+
+                    if flow_id in self.blocked_flows:
+                        continue
+
+                    datapath = self.datapaths.get(dpid)
+                    if datapath:
+                        self.block_traffic(datapath, eth_src, eth_dst, in_port)
+                        self.blocked_flows.add(flow_id)
+                        self.logger.warning(f"Bloqueando tráfego malicioso: eth_src={eth_src}, eth_dst={eth_dst}, dpid={dpid}")
         
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
