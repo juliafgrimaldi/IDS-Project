@@ -100,7 +100,12 @@ class TrafficMonitor(app_manager.RyuApp):
                     eth_dst = df.iloc[i]['eth_dst']
                     in_port = df.iloc[i]['in_port']
                     dpid = df.iloc[i]['dpid']
-                    flow_id = (eth_src, eth_dst, dpid)  
+                     
+                    
+                    if pd.isna(eth_src) or pd.isna(eth_dst) or pd.isna(dpid):
+                        continue
+
+                    flow_id = (eth_src, eth_dst, dpid) 
 
                     if flow_id in self.blocked_flows:
                         continue
