@@ -96,24 +96,16 @@ class TrafficMonitor(app_manager.RyuApp):
                     legitimate_traffic += 1  
                 else:
                     ddos_traffic += 1
-                    eth_src = df.iloc[i]['eth_src']
-                    eth_dst = df.iloc[i]['eth_dst']
-                    in_port = df.iloc[i]['in_port']
-                    dpid = df.iloc[i]['dpid']
+                    row = df.iloc[i]
+                    dpid = int(row['dpid'])
+                    eth_src = row['eth_src']
+                    eth_dst = row['eth_dst']
+                    in_port = int(row['in_port']) if row['in_port'] != 'NULL' else None
                      
-                    
-                    if pd.isna(eth_src) or pd.isna(eth_dst) or pd.isna(dpid):
-                        continue
-
-                    flow_id = (eth_src, eth_dst, dpid) 
-
-                    if flow_id in self.blocked_flows:
-                        continue
 
                     datapath = self.datapaths.get(dpid)
-                    if datapath:
+                    if datapath and in_port is not None:
                         self.block_traffic(datapath, eth_src, eth_dst, in_port)
-                        self.blocked_flows.add(flow_id)
                         self.logger.warning(f"Bloqueando tráfego malicioso: eth_src={eth_src}, eth_dst={eth_dst}, dpid={dpid}")
         
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
