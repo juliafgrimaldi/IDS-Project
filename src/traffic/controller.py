@@ -32,6 +32,7 @@ class TrafficMonitor(app_manager.RyuApp):
         self.monitor_thread = hub.spawn(self._monitor)
         self.train_file = 'traffic_stats.csv'
         self.filename = 'traffic_predict.csv'
+        self.processed_file = "traffic_predict_processed.csv"
         self.flow_model = None
         self._initialize_csv()
         self.models = {}
@@ -39,7 +40,17 @@ class TrafficMonitor(app_manager.RyuApp):
         self.numeric_columns = ['packets', 'bytes', 'duration_sec']
         self.categorical_columns = ['dpid', 'in_port', 'eth_src', 'eth_dst']
         self._train_models()
-        self.blocked_flows = set()
+        self._backup_old_traffic()
+
+    def _backup_old_traffic(self):
+        if os.path.exists(self.filename):
+            df = pd.read_csv(self.filename)
+            if not df.empty:
+                if os.path.exists(self.processed_file):
+                    df.to_csv(self.processed_file, mode='a', index=False, header=False)
+                else:
+                    df.to_csv(self.processed_file, index=False)
+                df.head(0).to_csv(self.filename, index=False)
 
     def _initialize_csv(self):
         if not os.path.exists(self.filename):
@@ -112,25 +123,6 @@ class TrafficMonitor(app_manager.RyuApp):
         except Exception as e:
             self.logger.error(f"Erro na predição: {e}")
 
-        try:
-            processed_file = 'traffic_predict_processed.csv'
-            
-            file_exists = os.path.isfile(processed_file)
-            with open(processed_file, 'a', newline='') as f_out:
-                writer = csv.writer(f_out)
-                if not file_exists:
-                    writer.writerow(df.columns)  
-                writer.writerows(df.values)     
-
-           
-            with open(self.filename, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec'])
-
-            self.logger.info(f"Dados processados movidos para {processed_file}")
-        except Exception as e:
-            self.logger.error(f"Erro ao mover dados processados: {e}")
-    
     # Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo.
     def is_high_volume(self, packets, bytes, duration_sec):
         packets_per_sec = packets / duration_sec if duration_sec > 0 else 0
