@@ -97,11 +97,11 @@ class TrafficMonitor(app_manager.RyuApp):
                 else:
                     ddos_traffic += 1
                     row = df.iloc[i]
-                    dpid = int(row['dpid'])
+                    dpid = int(row['dpid']) if not pd.isna(row['dpid']) else None
                     eth_src = row['eth_src']
                     eth_dst = row['eth_dst']
-                    in_port = int(row['in_port']) if row['in_port'] != 'NULL' else None
-                     
+                    in_port = int(row['in_port']) if not pd.isna(row['in_port']) else None
+                    self.logger.debug(f"Linha lida do CSV para predição: {row.to_dict()}")
 
                     datapath = self.datapaths.get(dpid)
                     if datapath and in_port is not None:
