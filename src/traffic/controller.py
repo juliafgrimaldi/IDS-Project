@@ -111,6 +111,25 @@ class TrafficMonitor(app_manager.RyuApp):
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
             self.logger.error(f"Erro na predição: {e}")
+
+        try:
+            processed_file = 'traffic_predict_processed.csv'
+            
+            file_exists = os.path.isfile(processed_file)
+            with open(processed_file, 'a', newline='') as f_out:
+                writer = csv.writer(f_out)
+                if not file_exists:
+                    writer.writerow(df.columns)  
+                writer.writerows(df.values)     
+
+           
+            with open(self.filename, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec'])
+
+            self.logger.info(f"Dados processados movidos para {processed_file}")
+        except Exception as e:
+            self.logger.error(f"Erro ao mover dados processados: {e}")
     
     # Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo.
     def is_high_volume(self, packets, bytes, duration_sec):
