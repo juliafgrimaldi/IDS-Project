@@ -16,6 +16,7 @@ from sklearn.feature_selection import SelectKBest, chi2
 import os
 import numpy as np
 import pandas as pd
+import pickle
 from ML.knn import train_knn, predict_knn
 from ML.svm import train_svm, predict_svm
 from ML.decisiontree import train_decision_tree, predict_decision_tree

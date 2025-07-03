@@ -7,6 +7,7 @@ from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
 import os
+import pickle
 from .preprocessing import preprocess_data
 
 def train_decision_tree(file_path):
@@ -32,6 +33,19 @@ def train_decision_tree(file_path):
     print(f"Decision Tree Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred))
 
+    model_bundle = {
+    'model': dt_model,
+    'selector': selector,
+    'encoder': encoder,
+    'imputer': imputer,
+    'scaler': scaler,
+    'accuracy': accuracy,
+    'numeric_columns': numeric_columns,
+    'categorical_columns': categorical_columns
+}
+
+    with open('dt_model_bundle.pkl', 'wb') as f:
+        pickle.dump(model_bundle, f)
     return dt_model, selector, encoder, imputer, scaler, accuracy, categorical_columns, numeric_columns
 
 def predict_decision_tree(model, selector, encoder, imputer, scaler, predict_file, numeric_columns, categorical_columns):

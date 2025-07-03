@@ -7,6 +7,7 @@ from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
 import os
+import pickle
 from .preprocessing import preprocess_data
 
 def train_svm(file_path):
@@ -41,6 +42,20 @@ def train_svm(file_path):
     accuracy = accuracy_score(y_test, y_pred_svm)
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred_svm))
+
+    model_bundle = {
+    'model': best_svm_model,
+    'selector': selector,
+    'encoder': encoder,
+    'imputer': imputer,
+    'scaler': scaler,
+    'accuracy': accuracy,
+    'numeric_columns': numeric_columns,
+    'categorical_columns': categorical_columns
+}
+
+    with open('svm_model_bundle.pkl', 'wb') as f:
+        pickle.dump(model_bundle, f)
 
     return best_svm_model, selector, encoder, imputer, scaler, accuracy, numeric_columns, categorical_columns
 

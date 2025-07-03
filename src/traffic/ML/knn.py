@@ -6,6 +6,7 @@ from sklearn.metrics import classification_report, accuracy_score
 from imblearn.over_sampling import SMOTE
 import logging
 import os
+import pickle
 from .preprocessing import preprocess_data
 
 def train_knn(file_path):
@@ -47,6 +48,19 @@ def train_knn(file_path):
     print("\nRelatório de Classificação:")
     print(classification_report(y_test, y_pred_knn))
 
+    model_bundle = {
+    'model': best_knn_model,
+    'selector': selector,
+    'encoder': encoder,
+    'imputer': imputer,
+    'scaler': scaler,
+    'accuracy': accuracy,
+    'numeric_columns': numeric_columns,
+    'categorical_columns': categorical_columns
+}
+
+    with open('knn_model_bundle.pkl', 'wb') as f:
+        pickle.dump(model_bundle, f)
 
     return best_knn_model, selector, encoder, imputer, scaler, accuracy,  numeric_columns, categorical_columns
 
