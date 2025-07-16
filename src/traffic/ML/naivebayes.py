@@ -19,10 +19,10 @@ def train_naive_bayes(file_path):
     X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
 
     # Aplicar SMOTE para balancear as classes
-    smote = SMOTE(random_state=42)
-    X_resampled, y_resampled = smote.fit_resample(X, y)
+    #smote = SMOTE(random_state=42)
+    #X_resampled, y_resampled = smote.fit_resample(X, y)
 
-    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
     param_grid = {
         'var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
