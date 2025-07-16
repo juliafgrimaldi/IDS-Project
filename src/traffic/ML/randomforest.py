@@ -31,7 +31,7 @@ def train_random_forest(file_path):
     y_pred = rf_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Random Forest Accuracy: {accuracy * 100:.2f}%")
-    print(classification_report(y_test, y_pred))
+    print(classification_report(y_test, y_pred, output_dict=True))
 
     model_bundle = {
     'model': rf_model,

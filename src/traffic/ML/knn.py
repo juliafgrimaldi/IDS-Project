@@ -46,7 +46,7 @@ def train_knn(file_path):
     print("\nMelhores hiperparâmetros encontrados:")
     print(grid_search.best_params_)
     print("\nRelatório de Classificação:")
-    print(classification_report(y_test, y_pred_knn))
+    print(classification_report(y_test, y_pred_knn, output_dict=True))
 
     model_bundle = {
     'model': best_knn_model,

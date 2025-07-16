@@ -41,7 +41,7 @@ def train_svm(file_path):
     y_pred_svm = best_svm_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred_svm)
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
-    print(classification_report(y_test, y_pred_svm))
+    print(classification_report(y_test, y_pred_svm, output_dict=True))
 
     model_bundle = {
     'model': best_svm_model,

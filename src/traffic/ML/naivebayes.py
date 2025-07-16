@@ -38,7 +38,7 @@ def train_naive_bayes(file_path):
     y_pred = best_nb_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Naive Bayes Accuracy: {accuracy * 100:.2f}%")
-    print(classification_report(y_test, y_pred))
+    print(classification_report(y_test, y_pred, output_dict=True))
 
     model_bundle = {
     'model': best_nb_model,
