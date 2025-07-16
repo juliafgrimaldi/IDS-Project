@@ -56,7 +56,7 @@ def simulate_traffic(net, duration=10, interval=5):
         if traffic_type == 'iperf':
             dst.cmd('iperf -s > /dev/null 2>&1 &')   
             print("Simulating traffic TCP between {} and {}".format(src.IP(), dst_ip))
-            src.cmd('iperf -c {} -t {} > /dev/null 2>&1 &'.format(dst_ip, duration))
+            src.cmd('iperf -c {} -t {} -b 5M > /dev/null 2>&1 &'.format(dst_ip, duration))
             time.sleep(20)
             dst.cmd('killall iperf')
 

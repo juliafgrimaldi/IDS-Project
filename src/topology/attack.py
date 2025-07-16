@@ -43,7 +43,7 @@ def simulate_attacks(net):
         src = choice(hosts)
         dst_ip = ip_generator()
         print("Performing Ping Flood: Source={} -> Target={}".format(src.IP(), dst_ip))
-        src.cmd("ping -f -i 0.1 -c 5000 {} &".format(dst_ip))
+        src.cmd("ping -f -i 0.001 -c 20000 {} &".format(dst_ip))
         sleep(50)  
 
     for _ in range(4):  
@@ -52,7 +52,7 @@ def simulate_attacks(net):
         if src != dst:  
             print("Performing ICMP Flood with iperf: Source={} -> Target={}".format(src.IP(), dst.IP()))
             dst.cmd("iperf -s > /dev/null 2>&1 &")  
-            src.cmd("iperf -c {} -u -b 500M -t 30 > /dev/null 2>&1 &".format(dst.IP()))
+            src.cmd("iperf -c {} -u -b 900M -t 120 > /dev/null 2>&1 &".format(dst.IP()))
             sleep(50) 
 
     print("Stopping attacks...")
