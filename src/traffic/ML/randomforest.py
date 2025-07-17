@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
@@ -32,6 +32,10 @@ def train_random_forest(file_path):
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Random Forest Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred, output_dict=True))
+
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    print("Matriz de Confusão:")
+    print(conf_matrix)
 
     model_bundle = {
     'model': rf_model,

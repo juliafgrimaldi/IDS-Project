@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
@@ -42,6 +42,10 @@ def train_svm(file_path):
     accuracy = accuracy_score(y_test, y_pred_svm)
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred_svm, output_dict=True))
+
+    conf_matrix = confusion_matrix(y_test, y_pred_svm)
+    print("Matriz de Confusão:")
+    print(conf_matrix)
 
     model_bundle = {
     'model': best_svm_model,

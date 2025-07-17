@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
 import logging
@@ -33,6 +33,10 @@ def train_decision_tree(file_path):
     print(f"Decision Tree Accuracy: {accuracy * 100:.2f}%")
     print(classification_report(y_test, y_pred, output_dict=True))
 
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    print("Matriz de Confusão:")
+    print(conf_matrix)
+    
     model_bundle = {
     'model': dt_model,
     'selector': selector,

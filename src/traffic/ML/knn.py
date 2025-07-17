@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from imblearn.over_sampling import SMOTE
 import logging
 import os
@@ -47,6 +47,10 @@ def train_knn(file_path):
     print(grid_search.best_params_)
     print("\nRelatório de Classificação:")
     print(classification_report(y_test, y_pred_knn, output_dict=True))
+
+    conf_matrix = confusion_matrix(y_test, y_pred_knn)
+    print("Matriz de Confusão:")
+    print(conf_matrix)
 
     model_bundle = {
     'model': best_knn_model,
