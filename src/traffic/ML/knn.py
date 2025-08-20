@@ -52,6 +52,13 @@ def train_knn(file_path):
     print("Matriz de Confusão:")
     print(conf_matrix)
 
+    numeric_features = numeric_columns.tolist() if hasattr(numeric_columns, 'tolist') else list(numeric_columns)
+    categorical_features = encoder.get_feature_names_out(categorical_columns).tolist()
+    all_features = numeric_features + categorical_features
+    
+    # Get selected feature names
+    selected_features = all_features[selector.get_support()]
+
     model_bundle = {
     'model': best_knn_model,
     'selector': selector,
@@ -60,7 +67,8 @@ def train_knn(file_path):
     'scaler': scaler,
     'accuracy': accuracy,
     'numeric_columns': numeric_columns,
-    'categorical_columns': categorical_columns
+    'categorical_columns': categorical_columns,
+    'selected_features': selected_features
 }
 
     with open('knn_model_bundle.pkl', 'wb') as f:
