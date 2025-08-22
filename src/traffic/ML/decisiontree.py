@@ -36,13 +36,6 @@ def train_decision_tree(file_path):
     conf_matrix = confusion_matrix(y_test, y_pred)
     print("Matriz de Confusão:")
     print(conf_matrix)
-    
-    numeric_features = numeric_columns.tolist() if hasattr(numeric_columns, 'tolist') else list(numeric_columns)
-    categorical_features = encoder.get_feature_names_out(categorical_columns).tolist()
-    all_features = numeric_features + categorical_features
-    
-    # Get selected feature names
-    selected_features = all_features[selector.get_support()]
 
     model_bundle = {
     'model': dt_model,
@@ -52,8 +45,7 @@ def train_decision_tree(file_path):
     'scaler': scaler,
     'accuracy': accuracy,
     'numeric_columns': numeric_columns,
-    'categorical_columns': categorical_columns,
-    'selected_features': selected_features
+    'categorical_columns': categorical_columns
 }
 
     with open('dt_model_bundle.pkl', 'wb') as f:
