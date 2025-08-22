@@ -17,6 +17,9 @@ def preprocess_data(data):
     X = data.drop('label', axis=1)
     y = data['label']
 
+    if 'time' in X.columns:
+        X = X.drop(columns=['time'])
+
     # identificar colunas numéricas e categóricas
     numeric_columns = X.select_dtypes(include=[np.number]).columns
     categorical_columns = X.select_dtypes(exclude=[np.number]).columns
