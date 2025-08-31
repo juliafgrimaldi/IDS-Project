@@ -119,7 +119,7 @@ class TrafficMonitor(app_manager.RyuApp):
                     if datapath and in_port is not None:
                         self.block_traffic(datapath, eth_src, eth_dst, in_port)
                         self.logger.warning(f"Bloqueando tráfego malicioso: eth_src={eth_src}, eth_dst={eth_dst}, dpid={dpid}")
-        
+         
             self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
         except Exception as e:
             self.logger.error(f"Erro na predição: {e}")
