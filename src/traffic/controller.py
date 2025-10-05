@@ -35,6 +35,9 @@ class TrafficMonitor(app_manager.RyuApp):
         self.filename = 'traffic_predict.csv'
         self.processed_file = "traffic_predict_processed.csv"
         self.flow_model = None
+        self.start_time = time.time()
+        self.last_processed_time = self.start_time
+        self.logger.info("TrafficMonitor iniciado em timestamp: {}".format(self.start_time))
         self._initialize_csv()
         self.models = {}
         self.accuracies = {}
@@ -95,34 +98,80 @@ class TrafficMonitor(app_manager.RyuApp):
     
     def predict_traffic(self):
         try:
-            self.logger.info("Predição com todos os modelos...")
-            predictions, features = self.predict_all_models(self.filename)  
-            final_predictions = self.weighted_vote(predictions) 
-        
+            if not os.path.exists(self.filename):
+                self.logger.debug("CSV não existe ainda")
+                return
+                
             df = pd.read_csv(self.filename)
+            if df.empty:
+                self.logger.debug("Nenhum dado para predição")
+                return
 
+            # Processar apenas fluxos novos desde o último processamento
+            df_unprocessed = df[df['time'] > self.last_processed_time].copy()
+            
+            if df_unprocessed.empty:
+                self.logger.debug("Nenhum fluxo novo para processar neste ciclo")
+                return
+
+            processing_start_time = time.time()
+            
+            temp_filename = 'temp_predict.csv'
+            df_unprocessed.to_csv(temp_filename, index=False)
+            
+            self.logger.info("Processando {} NOVOS fluxos com {} modelos".format(
+                len(df_unprocessed), len(self.models)
+            ))
+            
+            predictions, features = self.predict_all_models(temp_filename)
+            
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
+            
+            final_predictions = self.weighted_vote(predictions)
+            
+            for model_name, pred in predictions.items():
+                malicious = sum(pred)
+                self.logger.info("Modelo {}: {} maliciosos de {} ({:.1f}%)".format(
+                    model_name, malicious, len(pred), 
+                    (malicious/len(pred))*100 if len(pred) > 0 else 0
+                ))
+        
             legitimate_traffic = 0
             ddos_traffic = 0
-            for i, pred in enumerate(final_predictions):  
+            
+            for i, pred in enumerate(final_predictions):
+                if i >= len(df_unprocessed):
+                    break
+                    
                 if pred == 0:
-                    legitimate_traffic += 1  
+                    legitimate_traffic += 1
                 else:
                     ddos_traffic += 1
-                    row = df.iloc[i]
+                    row = df_unprocessed.iloc[i]
                     dpid = int(row['dpid']) if not pd.isna(row['dpid']) else None
                     eth_src = row['eth_src']
                     eth_dst = row['eth_dst']
                     in_port = int(row['in_port']) if not pd.isna(row['in_port']) else None
-                    self.logger.debug(f"Linha lida do CSV para predição: {row.to_dict()}")
 
                     datapath = self.datapaths.get(dpid)
                     if datapath and in_port is not None:
                         self.block_traffic(datapath, eth_src, eth_dst, in_port)
-                        self.logger.warning(f"Bloqueando tráfego malicioso: eth_src={eth_src}, eth_dst={eth_dst}, dpid={dpid}")
-         
-            self.logger.info(f"Legitimate traffic: {legitimate_traffic}, DDoS traffic: {ddos_traffic}")
+                        self.logger.warning("NOVO MALICIOSO: eth_src={}, eth_dst={}, dpid={}, packets={}".format(
+                            eth_src, eth_dst, dpid, row.get('packets', 0)
+                        ))
+            
+            self.last_processed_time = processing_start_time
+            
+            self.logger.info("RESULTADO (novos fluxos): {} legítimos, {} DDoS ({:.1f}% maliciosos)".format(
+                legitimate_traffic, ddos_traffic,
+                (ddos_traffic/(legitimate_traffic + ddos_traffic))*100 if (legitimate_traffic + ddos_traffic) > 0 else 0
+            ))
+            
         except Exception as e:
-            self.logger.error(f"Erro na predição: {e}")
+            self.logger.error("Erro na predição: {}".format(e))
+            import traceback
+            self.logger.error("Traceback: {}".format(traceback.format_exc()))
 
     # Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo.
     def is_high_volume(self, packets, bytes, duration_sec):
