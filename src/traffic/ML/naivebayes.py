@@ -8,7 +8,7 @@ from imblearn.over_sampling import SMOTE
 import logging
 import os
 import pickle
-from .preprocessing import preprocess_data
+from preprocessing import preprocess_data
 
 def train_naive_bayes(file_path):
     data = pd.read_csv(file_path)

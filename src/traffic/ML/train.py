@@ -1,9 +1,9 @@
 import os
 import sys
-from ML.train_knn import train_knn
-from ML.train_svm import train_svm
-from ML.train_decision_tree import train_decision_tree
-from ML.train_random_forest import train_random_forest
+from train_knn import train_knn
+from train_svm import train_svm
+from train_decision_tree import train_decision_tree
+from train_random_forest import train_random_forest
 
 def main():
     print("="*60)

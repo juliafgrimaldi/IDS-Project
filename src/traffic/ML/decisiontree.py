@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from imblearn.over_sampling import SMOTE
@@ -8,85 +8,67 @@ import pickle
 from preprocessing import preprocess_data
 
 def train_decision_tree(file_path):
-    """
-    Treina modelo Decision Tree para detecção de DDoS
-    
-    Args:
-        file_path: Caminho do dataset CSV
-    
-    Returns:
-        Componentes do modelo treinado
-    """
-    print("="*60)
-    print("TREINANDO DECISION TREE")
-    print("="*60)
-    
-    # Carrega dados
     data = pd.read_csv(file_path)
-    
+
     if data.empty:
         raise ValueError("O arquivo de treinamento está vazio.")
-    
-    print(f"\nDataset carregado: {len(data)} registros")
-    
-    # Filtra flows válidos (mesmo critério do controller)
-    data = data[
-        (data['packet_count'] > 10) & 
-        (data['byte_count'] > 1000) &
-        (data['flow_duration_sec'] >= 1)
-    ].copy()
-    
-    print(f"Após filtragem: {len(data)} registros")
-    
-    # Preprocessa dados
-    print("\nPreprocessando dados...")
+
     X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
-    
-    # Verifica distribuição de classes
-    unique, counts = np.unique(y, return_counts=True)
-    print(f"\nDistribuição de classes:")
-    for label, count in zip(unique, counts):
-        print(f"  Classe {label}: {count} ({count/len(y)*100:.2f}%)")
-    
-    # Aplicar SMOTE para balancear as classes
-    print("\nAplicando SMOTE para balanceamento...")
+
+    # Balancear classes com SMOTE
     smote = SMOTE(random_state=42)
     X_resampled, y_resampled = smote.fit_resample(X, y)
-    
-    unique_resampled, counts_resampled = np.unique(y_resampled, return_counts=True)
-    print(f"Após SMOTE:")
-    for label, count in zip(unique_resampled, counts_resampled):
-        print(f"  Classe {label}: {count} ({count/len(y_resampled)*100:.2f}%)")
-    
-    # Split train/test
+
     X_train, X_test, y_train, y_test = train_test_split(
         X_resampled, y_resampled, test_size=0.3, random_state=42
     )
+
+    # Grid Search para hiperparâmetros
+    param_grid = {
+        'max_depth': [10, 20, 30, None],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 5],
+        'criterion': ['gini', 'entropy']
+    }
     
-    print(f"\nTreino: {len(X_train)} amostras")
-    print(f"Teste:  {len(X_test)} amostras")
-    
-    # Treina modelo
-    print("\nTreinando Decision Tree...")
-    dt_model = DecisionTreeClassifier(
-        random_state=42,
-        max_depth=20,
-        min_samples_split=10,
-        min_samples_leaf=5
-    )
-    dt_model.fit(X_train, y_train)
-    
+    dt_model = DecisionTreeClassifier(random_state=42)
+    grid_search = GridSearchCV(dt_model, param_grid, cv=5, scoring='accuracy')
+    grid_search.fit(X_train, y_train)
+
+    best_dt_model = grid_search.best_estimator_
+
     # Avaliação
-    print("\nAvaliando modelo...")
-    y_pred = dt_model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    y_pred_dt = best_dt_model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred_dt)
     
-    print(f"\n{'='*60}")
     print(f"Decision Tree Accuracy: {accuracy * 100:.2f}%")
-    print(f"{'='*60}")
-    
+    print("\nMelhores hiperparâmetros:")
+    print(grid_search.best_params_)
     print("\nRelatório de Classificação:")
-    report = classification_report(y_test
+    print(classification_report(y_test, y_pred_dt))
+    print("\nMatriz de Confusão:")
+    print(confusion_matrix(y_test, y_pred_dt))
+
+    # Salvar bundle
+    model_bundle = {
+        'model': best_dt_model,
+        'selector': selector,
+        'encoder': encoder,
+        'imputer': imputer,
+        'scaler': scaler,
+        'accuracy': accuracy,
+        'numeric_columns': numeric_columns,
+        'categorical_columns': categorical_columns
+    }
+
+    with open('models/dt_model_bundle.pkl', 'wb') as f:
+        pickle.dump(model_bundle, f)
+
+    print("\n✓ Modelo Decision Tree salvo em: models/dt_model_bundle.pkl")
+    
+    return best_dt_model, selector, encoder, imputer, scaler, accuracy, numeric_columns, categorical_columns
+
+
 
 def predict_decision_tree(model, selector, encoder, imputer, scaler, predict_file, numeric_columns, categorical_columns):
     predict_flow_dataset = pd.read_csv(predict_file)

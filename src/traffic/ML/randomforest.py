@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from imblearn.over_sampling import SMOTE
 import pickle
-from .preprocessing import preprocess_data
+from preprocessing import preprocess_data
 
 def train_random_forest(file_path):
     data = pd.read_csv(file_path)
