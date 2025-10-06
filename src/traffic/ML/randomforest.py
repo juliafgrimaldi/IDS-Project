@@ -3,15 +3,11 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
-from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
-import logging
-import os
 import pickle
 from .preprocessing import preprocess_data
 
 def train_random_forest(file_path):
-    # Carregar os dados
     data = pd.read_csv(file_path)
 
     if data.empty:
@@ -19,38 +15,53 @@ def train_random_forest(file_path):
 
     X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
 
-    # Aplicar SMOTE para balancear as classes
+    # Balancear classes com SMOTE
     smote = SMOTE(random_state=42)
     X_resampled, y_resampled = smote.fit_resample(X, y)
 
-    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_resampled, y_resampled, test_size=0.3, random_state=42
+    )
 
-    rf_model = RandomForestClassifier(n_estimators=100, max_depth=10, min_samples_split=10, min_samples_leaf=5, random_state=42)
-    rf_model.fit(X_train, y_train) 
+    # Treinar Random Forest
+    rf_model = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=10,
+        min_samples_split=10,
+        min_samples_leaf=5,
+        random_state=42
+    )
+    rf_model.fit(X_train, y_train)
 
+    # Avaliação
     y_pred = rf_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
+    
     print(f"Random Forest Accuracy: {accuracy * 100:.2f}%")
-    print(classification_report(y_test, y_pred, output_dict=True))
+    print("\nRelatório de Classificação:")
+    print(classification_report(y_test, y_pred))
+    print("\nMatriz de Confusão:")
+    print(confusion_matrix(y_test, y_pred))
 
-    conf_matrix = confusion_matrix(y_test, y_pred)
-    print("Matriz de Confusão:")
-    print(conf_matrix)
-
+    # Salvar bundle
     model_bundle = {
-    'model': rf_model,
-    'selector': selector,
-    'encoder': encoder,
-    'imputer': imputer,
-    'scaler': scaler,
-    'accuracy': accuracy,
-    'numeric_columns': numeric_columns,
-    'categorical_columns': categorical_columns
-}
+        'model': rf_model,
+        'selector': selector,
+        'encoder': encoder,
+        'imputer': imputer,
+        'scaler': scaler,
+        'accuracy': accuracy,
+        'numeric_columns': numeric_columns,
+        'categorical_columns': categorical_columns
+    }
 
-    with open('randomforest_model_bundle.pkl', 'wb') as f:
+    with open('models/randomforest_model_bundle.pkl', 'wb') as f:
         pickle.dump(model_bundle, f)
+
+    print("\n✓ Modelo Random Forest salvo em: models/randomforest_model_bundle.pkl")
+    
     return rf_model, selector, encoder, imputer, scaler, accuracy, numeric_columns, categorical_columns
+
 
 def predict_random_forest(model, selector, encoder, imputer, scaler, predict_file, numeric_columns, categorical_columns):
     predict_flow_dataset = pd.read_csv(predict_file)

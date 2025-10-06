@@ -1,12 +1,9 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
-from sklearn.model_selection import GridSearchCV
 from imblearn.over_sampling import SMOTE
-import logging
-import os
 import pickle
 from .preprocessing import preprocess_data
 
@@ -14,54 +11,62 @@ def train_svm(file_path):
     data = pd.read_csv(file_path)
 
     if data.empty:
-            raise ValueError("O arquivo de treinamento está vazio.")
+        raise ValueError("O arquivo de treinamento está vazio.")
 
     X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
 
-    # Aplicar SMOTE para balancear as classes
+    # Balancear classes com SMOTE
     smote = SMOTE(random_state=42)
     X_resampled, y_resampled = smote.fit_resample(X, y)
 
-    X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_resampled, y_resampled, test_size=0.3, random_state=42
+    )
 
+    # Grid Search para hiperparâmetros
     param_grid = {
-            'C': [0.1, 1, 10, 100],  # Penalidade para erros de classificação
-            'kernel': ['linear', 'rbf'],  # Tipos de kernel
-            'gamma': ['scale', 'auto']  # Parâmetro gamma para o kernel rbf
-        }
+        'C': [0.1, 1, 10, 100],
+        'kernel': ['linear', 'rbf'],
+        'gamma': ['scale', 'auto']
+    }
     
     svm_model = SVC(random_state=42)
-
     grid_search = GridSearchCV(svm_model, param_grid, cv=5, scoring='accuracy')
     grid_search.fit(X_train, y_train)
 
     best_svm_model = grid_search.best_estimator_
 
-    # Avaliação do modelo
+    # Avaliação
     y_pred_svm = best_svm_model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred_svm)
+    
     print(f"SVM Accuracy: {accuracy * 100:.2f}%")
-    print(classification_report(y_test, y_pred_svm, output_dict=True))
+    print("\nMelhores hiperparâmetros:")
+    print(grid_search.best_params_)
+    print("\nRelatório de Classificação:")
+    print(classification_report(y_test, y_pred_svm))
+    print("\nMatriz de Confusão:")
+    print(confusion_matrix(y_test, y_pred_svm))
 
-    conf_matrix = confusion_matrix(y_test, y_pred_svm)
-    print("Matriz de Confusão:")
-    print(conf_matrix)
-
+    # Salvar bundle
     model_bundle = {
-    'model': best_svm_model,
-    'selector': selector,
-    'encoder': encoder,
-    'imputer': imputer,
-    'scaler': scaler,
-    'accuracy': accuracy,
-    'numeric_columns': numeric_columns,
-    'categorical_columns': categorical_columns
-}
+        'model': best_svm_model,
+        'selector': selector,
+        'encoder': encoder,
+        'imputer': imputer,
+        'scaler': scaler,
+        'accuracy': accuracy,
+        'numeric_columns': numeric_columns,
+        'categorical_columns': categorical_columns
+    }
 
-    with open('svm_model_bundle.pkl', 'wb') as f:
+    with open('models/svm_model_bundle.pkl', 'wb') as f:
         pickle.dump(model_bundle, f)
 
+    print("\n✓ Modelo SVM salvo em: models/svm_model_bundle.pkl")
+    
     return best_svm_model, selector, encoder, imputer, scaler, accuracy, numeric_columns, categorical_columns
+
 
 def predict_svm(model, selector, encoder, imputer, scaler, predict_file, numeric_columns, categorical_columns):
     predict_flow_dataset = pd.read_csv(predict_file)
