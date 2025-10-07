@@ -10,18 +10,32 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet, ether_types
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.topology import event
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
-from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectKBest, chi2
 import os
+import sys
 import numpy as np
 import pandas as pd
 import pickle
-from ML.knn import train_knn, predict_knn
-from ML.svm import train_svm, predict_svm
-from ML.decisiontree import train_decision_tree, predict_decision_tree
-from ML.naivebayes import train_naive_bayes, predict_naive_bayes
-from ML.randomforest import train_random_forest, predict_random_forest
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+from imblearn.over_sampling import SMOTE
+
+# Adicionar diretório ML ao path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ML'))
+
+try:
+    from preprocessing import preprocess_data
+    from ML.knn import predict_knn
+    from ML.svm import predict_svm
+    from ML.decisiontree import predict_decision_tree
+    from ML.randomforest import predict_random_forest
+except ImportError as e:
+    print(f"ERRO ao importar módulos ML: {e}")
+    print("Certifique-se de que os arquivos estão em ML/")
+
 
 class TrafficMonitor(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -30,23 +44,356 @@ class TrafficMonitor(app_manager.RyuApp):
         super(TrafficMonitor, self).__init__(*args, **kwargs)
         self.datapaths = {}
         self.mac_to_port = {}
-        self.monitor_thread = hub.spawn(self._monitor)
-        self.train_file = 'traffic_stats.csv'
+        
+        # Configurações de arquivos
+        self.train_file = 'ML/backend/traffic_dataset.csv'  # Dataset para treino
         self.filename = 'traffic_predict.csv'
         self.processed_file = "traffic_predict_processed.csv"
+        self.models_dir = 'models'
+        
         self.flow_model = None
         self.start_time = time.time()
         self.last_processed_time = self.start_time
-        self.logger.info("TrafficMonitor iniciado em timestamp: {}".format(self.start_time))
+        
+        self.logger.info("="*60)
+        self.logger.info("TrafficMonitor iniciando...")
+        self.logger.info("="*60)
+        self.logger.info("Timestamp de início: {}".format(self.start_time))
+        
+        # Inicializar estruturas
         self._initialize_csv()
+        self._backup_old_traffic()
+        
+        # Treinar ou carregar modelos
         self.models = {}
         self.accuracies = {}
-        self.numeric_columns = ['packets', 'bytes', 'duration_sec']
-        self.categorical_columns = ['dpid', 'in_port', 'eth_src', 'eth_dst']
-        self._train_models()
-        self._backup_old_traffic()
+        self.numeric_columns = []
+        self.categorical_columns = []
+        
+        self._load_or_train_models()
+        
+        # Iniciar monitor
+        self.monitor_thread = hub.spawn(self._monitor)
+        self.logger.info("TrafficMonitor inicializado com sucesso!")
+
+    def _load_or_train_models(self):
+        """Carrega modelos existentes ou treina novos"""
+        os.makedirs(self.models_dir, exist_ok=True)
+        
+        model_files = {
+            'knn': 'knn_model_bundle.pkl',
+            'random_forest': 'randomforest_model_bundle.pkl',
+            'decision_tree': 'dt_model_bundle.pkl',
+            'svm': 'svm_model_bundle.pkl'
+        }
+        
+        all_models_exist = all(
+            os.path.exists(os.path.join(self.models_dir, fname)) 
+            for fname in model_files.values()
+        )
+        
+        if all_models_exist:
+            self.logger.info("Modelos encontrados! Carregando...")
+            self._load_models(model_files)
+        else:
+            self.logger.warning("Modelos não encontrados. Iniciando treinamento...")
+            if not os.path.exists(self.train_file):
+                self.logger.error("ERRO: Dataset de treino não encontrado: {}".format(self.train_file))
+                self.logger.error("Por favor, execute primeiro: python train_models_standalone.py")
+                raise FileNotFoundError("Dataset de treino não encontrado")
+            
+            self._train_all_models()
+            self._load_models(model_files)
+
+    def _load_models(self, model_files):
+        """Carrega os bundles dos modelos"""
+        self.logger.info("Carregando modelos de: {}".format(self.models_dir))
+        
+        for model_name, filename in model_files.items():
+            filepath = os.path.join(self.models_dir, filename)
+            try:
+                with open(filepath, 'rb') as f:
+                    bundle = pickle.load(f)
+                    self.models[model_name] = bundle
+                    self.accuracies[model_name] = bundle.get('accuracy', 1.0)
+                    
+                    # Pegar colunas do primeiro modelo
+                    if not self.numeric_columns:
+                        self.numeric_columns = bundle.get('numeric_columns', [])
+                        self.categorical_columns = bundle.get('categorical_columns', [])
+                    
+                    self.logger.info("✓ {} carregado (acurácia: {:.2f}%)".format(
+                        model_name, self.accuracies[model_name] * 100
+                    ))
+            except Exception as e:
+                self.logger.error("Erro ao carregar {}: {}".format(model_name, e))
+
+    def _train_all_models(self):
+        """Treina todos os modelos"""
+        self.logger.info("="*60)
+        self.logger.info("INICIANDO TREINAMENTO DE MODELOS")
+        self.logger.info("="*60)
+        self.logger.info("Dataset: {}".format(self.train_file))
+        
+        # KNN
+        try:
+            self.logger.info("\n1/4 - Treinando KNN...")
+            self._train_knn()
+        except Exception as e:
+            self.logger.error("Erro ao treinar KNN: {}".format(e))
+        
+        # Random Forest
+        try:
+            self.logger.info("\n2/4 - Treinando Random Forest...")
+            self._train_random_forest()
+        except Exception as e:
+            self.logger.error("Erro ao treinar Random Forest: {}".format(e))
+        
+        # Decision Tree
+        try:
+            self.logger.info("\n3/4 - Treinando Decision Tree...")
+            self._train_decision_tree()
+        except Exception as e:
+            self.logger.error("Erro ao treinar Decision Tree: {}".format(e))
+        
+        # SVM
+        try:
+            self.logger.info("\n4/4 - Treinando SVM...")
+            self._train_svm()
+        except Exception as e:
+            self.logger.error("Erro ao treinar SVM: {}".format(e))
+        
+        self.logger.info("\n" + "="*60)
+        self.logger.info("TREINAMENTO CONCLUÍDO!")
+        self.logger.info("="*60)
+
+    def _train_knn(self):
+        """Treina modelo KNN"""
+        data = pd.read_csv(self.train_file)
+        if data.empty:
+            raise ValueError("Dataset vazio")
+
+        X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
+        
+        smote = SMOTE(random_state=42)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_resampled, y_resampled, test_size=0.3, random_state=42
+        )
+        
+        param_grid = {
+            'n_neighbors': [3, 5, 7],
+            'weights': ['uniform', 'distance'],
+            'p': [1, 2]
+        }
+        
+        knn_model = KNeighborsClassifier()
+        grid_search = GridSearchCV(knn_model, param_grid, cv=3, scoring='accuracy')
+        grid_search.fit(X_train, y_train)
+        best_model = grid_search.best_estimator_
+        
+        y_pred = best_model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        self.logger.info("KNN Accuracy: {:.2f}%".format(accuracy * 100))
+        
+        bundle = {
+            'model': best_model,
+            'selector': selector,
+            'encoder': encoder,
+            'imputer': imputer,
+            'scaler': scaler,
+            'accuracy': accuracy,
+            'numeric_columns': numeric_columns,
+            'categorical_columns': categorical_columns
+        }
+        
+        with open(os.path.join(self.models_dir, 'knn_model_bundle.pkl'), 'wb') as f:
+            pickle.dump(bundle, f)
+
+    def _train_random_forest(self):
+        """Treina modelo Random Forest"""
+        data = pd.read_csv(self.train_file)
+        X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
+        
+        smote = SMOTE(random_state=42)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_resampled, y_resampled, test_size=0.3, random_state=42
+        )
+        
+        rf_model = RandomForestClassifier(
+            n_estimators=100, max_depth=10, min_samples_split=10,
+            min_samples_leaf=5, random_state=42, n_jobs=-1
+        )
+        rf_model.fit(X_train, y_train)
+        
+        y_pred = rf_model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        self.logger.info("Random Forest Accuracy: {:.2f}%".format(accuracy * 100))
+        
+        bundle = {
+            'model': rf_model,
+            'selector': selector,
+            'encoder': encoder,
+            'imputer': imputer,
+            'scaler': scaler,
+            'accuracy': accuracy,
+            'numeric_columns': numeric_columns,
+            'categorical_columns': categorical_columns
+        }
+        
+        with open(os.path.join(self.models_dir, 'randomforest_model_bundle.pkl'), 'wb') as f:
+            pickle.dump(bundle, f)
+
+    def _train_decision_tree(self):
+        """Treina modelo Decision Tree"""
+        data = pd.read_csv(self.train_file)
+        X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
+        
+        smote = SMOTE(random_state=42)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_resampled, y_resampled, test_size=0.3, random_state=42
+        )
+        
+        dt_model = DecisionTreeClassifier(
+            max_depth=20, min_samples_split=10, 
+            min_samples_leaf=5, random_state=42
+        )
+        dt_model.fit(X_train, y_train)
+        
+        y_pred = dt_model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        self.logger.info("Decision Tree Accuracy: {:.2f}%".format(accuracy * 100))
+        
+        bundle = {
+            'model': dt_model,
+            'selector': selector,
+            'encoder': encoder,
+            'imputer': imputer,
+            'scaler': scaler,
+            'accuracy': accuracy,
+            'numeric_columns': numeric_columns,
+            'categorical_columns': categorical_columns
+        }
+        
+        with open(os.path.join(self.models_dir, 'dt_model_bundle.pkl'), 'wb') as f:
+            pickle.dump(bundle, f)
+
+    def _train_svm(self):
+        """Treina modelo SVM"""
+        data = pd.read_csv(self.train_file)
+        X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
+        
+        smote = SMOTE(random_state=42)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_resampled, y_resampled, test_size=0.3, random_state=42
+        )
+        
+        # Limitar para datasets grandes
+        if len(X_train) > 30000:
+            indices = np.random.choice(len(X_train), 30000, replace=False)
+            X_train = X_train.iloc[indices] if hasattr(X_train, 'iloc') else X_train[indices]
+            y_train = y_train.iloc[indices] if hasattr(y_train, 'iloc') else y_train[indices]
+        
+        svm_model = SVC(kernel='rbf', C=1.0, gamma='scale', random_state=42)
+        svm_model.fit(X_train, y_train)
+        
+        y_pred = svm_model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        self.logger.info("SVM Accuracy: {:.2f}%".format(accuracy * 100))
+        
+        bundle = {
+            'model': svm_model,
+            'selector': selector,
+            'encoder': encoder,
+            'imputer': imputer,
+            'scaler': scaler,
+            'accuracy': accuracy,
+            'numeric_columns': numeric_columns,
+            'categorical_columns': categorical_columns
+        }
+        
+        with open(os.path.join(self.models_dir, 'svm_model_bundle.pkl'), 'wb') as f:
+            pickle.dump(bundle, f)
+
+    def predict_all_models(self, data):
+        """Faz predição com todos os modelos"""
+        predictions = {}
+        ddos_flows = {}
+        
+        try:
+            predictions['knn'], ddos_flows['knn'] = predict_knn(
+                self.models['knn'], data
+            )
+        except Exception as e:
+            self.logger.error("Erro em KNN: {}".format(e))
+            predictions['knn'] = np.array([])
+        
+        try:
+            predictions['random_forest'], ddos_flows['random_forest'] = predict_random_forest(
+                self.models['random_forest'], data
+            )
+        except Exception as e:
+            self.logger.error("Erro em Random Forest: {}".format(e))
+            predictions['random_forest'] = np.array([])
+        
+        try:
+            predictions['decision_tree'], ddos_flows['decision_tree'] = predict_decision_tree(
+                self.models['decision_tree'], data
+            )
+        except Exception as e:
+            self.logger.error("Erro em Decision Tree: {}".format(e))
+            predictions['decision_tree'] = np.array([])
+        
+        try:
+            predictions['svm'], ddos_flows['svm'] = predict_svm(
+                self.models['svm'], data
+            )
+        except Exception as e:
+            self.logger.error("Erro em SVM: {}".format(e))
+            predictions['svm'] = np.array([])
+        
+        return predictions, ddos_flows
+
+    def weighted_vote(self, predictions):
+        """Votação ponderada baseada na acurácia"""
+        if not predictions:
+            return []
+        
+        # Filtra predições vazias
+        valid_predictions = {k: v for k, v in predictions.items() if len(v) > 0}
+        
+        if not valid_predictions:
+            return []
+        
+        num_samples = len(list(valid_predictions.values())[0])
+        weighted_votes = {}
+        
+        for model_name, pred in valid_predictions.items():
+            weight = self.accuracies.get(model_name, 1.0)
+            for i, p in enumerate(pred):
+                if i not in weighted_votes:
+                    weighted_votes[i] = 0
+                weighted_votes[i] += p * weight
+        
+        final_predictions = []
+        for i in range(num_samples):
+            final_predictions.append(1 if weighted_votes.get(i, 0) > 0.5 else 0)
+        
+        return final_predictions
 
     def _backup_old_traffic(self):
+        """Backup de tráfego antigo"""
         if os.path.exists(self.filename):
             df = pd.read_csv(self.filename)
             if not df.empty:
@@ -57,61 +404,29 @@ class TrafficMonitor(app_manager.RyuApp):
                 df.head(0).to_csv(self.filename, index=False)
 
     def _initialize_csv(self):
+        """Inicializa arquivo CSV"""
         if not os.path.exists(self.filename):
             with open(self.filename, 'w', newline='') as csvfile:
                 fieldnames = ['time', 'dpid', 'in_port', 'eth_src', 'eth_dst', 'packets', 'bytes', 'duration_sec']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 writer.writeheader()
 
-    def _train_models(self):
-        self.logger.info("Treinando todos os modelos...")
-        self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, self.accuracies['decision_tree'], self.numeric_columns, self.categorical_columns= train_decision_tree(self.train_file)
-        self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, self.accuracies['knn'], self.numeric_columns, self.categorical_columns = train_knn(self.train_file)
-        self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, self.accuracies['naive_bayes'], self.numeric_columns, self.categorical_columns = train_naive_bayes(self.train_file)
-        self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, self.accuracies['random_forest'], self.numeric_columns, self.categorical_columns = train_random_forest(self.train_file)
-        self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, self.accuracies['svm'], self.numeric_columns, self.categorical_columns = train_svm(self.train_file)
-
-    def predict_all_models(self, data): 
-        predictions = {}
-        ddos_flows = {}
-        predictions['decision_tree'], ddos_flows['decision_tree'] = predict_decision_tree(self.models['decision_tree'], self.dt_selector, self.dt_encoder, self.dt_imputer, self.dt_scaler, data, self.numeric_columns, self.categorical_columns)
-        predictions['knn'], ddos_flows['knn']= predict_knn(self.models['knn'], self.knn_selector, self.knn_encoder, self.knn_imputer, self.knn_scaler, data, self.numeric_columns, self.categorical_columns)
-        predictions['naive_bayes'], ddos_flows['naive_bayes'] = predict_naive_bayes(self.models['naive_bayes'], self.nb_selector, self.nb_encoder, self.nb_imputer, self.nb_scaler, data, self.numeric_columns, self.categorical_columns)
-        predictions['random_forest'], ddos_flows['random_forest'] = predict_random_forest(self.models['random_forest'], self.rf_selector, self.rf_encoder, self.rf_imputer, self.rf_scaler, data, self.numeric_columns, self.categorical_columns)
-        predictions['svm'], ddos_flows['svm'] = predict_svm(self.models['svm'], self.svm_selector, self.svm_encoder, self.svm_imputer, self.svm_scaler, data, self.numeric_columns, self.categorical_columns)
-        return predictions, ddos_flows
-
-    def weighted_vote(self, predictions):
-        weighted_votes = {}
-        for model_name, pred in predictions.items():
-            weight = self.accuracies[model_name] 
-            for i, p in enumerate(pred):
-                if i not in weighted_votes:
-                    weighted_votes[i] = 0
-                weighted_votes[i] += p * weight  
-        
-        final_predictions = []
-        for i in weighted_votes:
-            final_predictions.append(1 if weighted_votes[i] > 0.5 else 0)  # Decisão final
-        
-        return final_predictions
-    
     def predict_traffic(self):
+        """Predição de tráfego malicioso"""
         try:
             if not os.path.exists(self.filename):
                 self.logger.debug("CSV não existe ainda")
                 return
-                
+            
             df = pd.read_csv(self.filename)
             if df.empty:
                 self.logger.debug("Nenhum dado para predição")
                 return
 
-            # Processar apenas fluxos novos desde o último processamento
             df_unprocessed = df[df['time'] > self.last_processed_time].copy()
             
             if df_unprocessed.empty:
-                self.logger.debug("Nenhum fluxo novo para processar neste ciclo")
+                self.logger.debug("Nenhum fluxo novo para processar")
                 return
 
             processing_start_time = time.time()
@@ -119,9 +434,7 @@ class TrafficMonitor(app_manager.RyuApp):
             temp_filename = 'temp_predict.csv'
             df_unprocessed.to_csv(temp_filename, index=False)
             
-            self.logger.info("Processando {} NOVOS fluxos com {} modelos".format(
-                len(df_unprocessed), len(self.models)
-            ))
+            self.logger.info("Processando {} NOVOS fluxos".format(len(df_unprocessed)))
             
             predictions, features = self.predict_all_models(temp_filename)
             
@@ -131,19 +444,19 @@ class TrafficMonitor(app_manager.RyuApp):
             final_predictions = self.weighted_vote(predictions)
             
             for model_name, pred in predictions.items():
-                malicious = sum(pred)
-                self.logger.info("Modelo {}: {} maliciosos de {} ({:.1f}%)".format(
-                    model_name, malicious, len(pred), 
-                    (malicious/len(pred))*100 if len(pred) > 0 else 0
-                ))
-        
+                if len(pred) > 0:
+                    malicious = sum(pred)
+                    self.logger.info("Modelo {}: {} maliciosos de {}".format(
+                        model_name, malicious, len(pred)
+                    ))
+            
             legitimate_traffic = 0
             ddos_traffic = 0
             
             for i, pred in enumerate(final_predictions):
                 if i >= len(df_unprocessed):
                     break
-                    
+                
                 if pred == 0:
                     legitimate_traffic += 1
                 else:
@@ -157,64 +470,64 @@ class TrafficMonitor(app_manager.RyuApp):
                     datapath = self.datapaths.get(dpid)
                     if datapath and in_port is not None:
                         self.block_traffic(datapath, eth_src, eth_dst, in_port)
-                        self.logger.warning("NOVO MALICIOSO: eth_src={}, eth_dst={}, dpid={}, packets={}".format(
-                            eth_src, eth_dst, dpid, row.get('packets', 0)
+                        self.logger.warning("MALICIOSO BLOQUEADO: src={}, dst={}, dpid={}".format(
+                            eth_src, eth_dst, dpid
                         ))
             
             self.last_processed_time = processing_start_time
             
-            self.logger.info("RESULTADO (novos fluxos): {} legítimos, {} DDoS ({:.1f}% maliciosos)".format(
-                legitimate_traffic, ddos_traffic,
-                (ddos_traffic/(legitimate_traffic + ddos_traffic))*100 if (legitimate_traffic + ddos_traffic) > 0 else 0
-            ))
+            total = legitimate_traffic + ddos_traffic
+            if total > 0:
+                self.logger.info("RESULTADO: {} legítimos, {} DDoS ({:.1f}% maliciosos)".format(
+                    legitimate_traffic, ddos_traffic, (ddos_traffic/total)*100
+                ))
             
         except Exception as e:
             self.logger.error("Erro na predição: {}".format(e))
             import traceback
-            self.logger.error("Traceback: {}".format(traceback.format_exc()))
+            self.logger.error(traceback.format_exc())
 
-    # Verifica se há um alto volume de pacotes ou bytes em um curto período de tempo.
     def is_high_volume(self, packets, bytes, duration_sec):
+        """Verifica alto volume"""
         packets_per_sec = packets / duration_sec if duration_sec > 0 else 0
         bytes_per_sec = bytes / duration_sec if duration_sec > 0 else 0
         return packets_per_sec > 10000 or bytes_per_sec > 100000000
 
-    # Verifica se a conexão é muito longa.
     def is_long_connection(self, duration_sec):
-        return duration_sec > 3600  
+        """Verifica conexão longa"""
+        return duration_sec > 3600
 
-    # Verifica se o endereço MAC é inválido ou tem padrões repetitivos.
     def is_invalid_mac(self, mac):
+        """Verifica MAC inválido"""
         invalid_patterns = [
-            r"00:00:00:00:00:00",  # MAC inválido
-            r"([0-9A-Fa-f]{2}:)\1{5}"  # Padrões repetitivos
+            r"00:00:00:00:00:00",
+            r"([0-9A-Fa-f]{2}:)\1{5}"
         ]
         for pattern in invalid_patterns:
             if re.match(pattern, mac, re.IGNORECASE):
                 return True
         return False
-    
+
     def block_traffic(self, datapath, eth_src, eth_dst, in_port):
+        """Bloqueia tráfego malicioso"""
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-
-        # Cria uma regra de fluxo para descartar pacotes
         match = parser.OFPMatch(in_port=in_port, eth_src=eth_src, eth_dst=eth_dst)
-        actions = []  # Nenhuma ação (descartar pacotes, n sao encaminhados)
-        self.add_flow(datapath, 100, match, actions, idle=60, hard=120) 
+        actions = []
+        self.add_flow(datapath, 100, match, actions, idle=60, hard=120)
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def _state_change_handler(self, ev):
         datapath = ev.datapath
         if ev.state == MAIN_DISPATCHER:
-            self.logger.info('Registering datapath: %016x', datapath.id if datapath.id else 0)
+            self.logger.info('Registrando datapath: %016x', datapath.id if datapath.id else 0)
             self.datapaths[datapath.id] = datapath
         elif ev.state == DEAD_DISPATCHER:
-            self.logger.info('Unregistering datapath: %016x', datapath.id if datapath.id else 0)
             if datapath.id in self.datapaths:
                 del self.datapaths[datapath.id]
 
     def _monitor(self):
+        """Thread de monitoramento"""
         while True:
             for dp in self.datapaths.values():
                 self._request_stats(dp)
@@ -222,7 +535,7 @@ class TrafficMonitor(app_manager.RyuApp):
             self.predict_traffic()
 
     def _request_stats(self, datapath):
-        self.logger.info('Sending flow stats request to: %016x', datapath.id if datapath.id else 0)
+        """Requisita estatísticas"""
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         req = parser.OFPFlowStatsRequest(datapath)
@@ -230,6 +543,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
+        """Handler de estatísticas de fluxo"""
         body = ev.msg.body
         timestamp = time.time()
 
@@ -245,123 +559,98 @@ class TrafficMonitor(app_manager.RyuApp):
                 bytes = stat.byte_count
                 duration_sec = stat.duration_sec
 
-
-                if (
-                    self.is_high_volume(packets, bytes, duration_sec) or
+                if (self.is_high_volume(packets, bytes, duration_sec) or
                     self.is_long_connection(duration_sec) or
                     self.is_invalid_mac(eth_src) or
                     self.is_invalid_mac(eth_dst)):
-
+                    
                     self.block_traffic(ev.msg.datapath, eth_src, eth_dst, in_port)
-
-                    self.logger.warning(f"Tráfego suspeito detectado e bloqueado: "
-                                       f"eth_src={eth_src}, eth_dst={eth_dst}, "
-                                       f"packets={packets}, bytes={bytes}, duration_sec={duration_sec}")
+                    self.logger.warning("Tráfego suspeito bloqueado: src={}, dst={}".format(
+                        eth_src, eth_dst
+                    ))
                     continue
 
                 writer.writerow({
-                'time': timestamp,
-                'dpid': ev.msg.datapath.id,
-                'in_port': stat.match.get('in_port', 'NULL'),
-                'eth_src': stat.match.get('eth_src', 'NULL'),
-                'eth_dst': stat.match.get('eth_dst', 'NULL'),
-                'packets': stat.packet_count,
-                'bytes': stat.byte_count,
-                'duration_sec': stat.duration_sec
-            })
+                    'time': timestamp,
+                    'dpid': ev.msg.datapath.id,
+                    'in_port': in_port,
+                    'eth_src': eth_src,
+                    'eth_dst': eth_dst,
+                    'packets': packets,
+                    'bytes': bytes,
+                    'duration_sec': duration_sec
+                })
 
     @set_ev_cls(event.EventSwitchEnter)
     def switch_enter_handler(self, ev):
         switch = ev.switch
-        self.logger.info('Switch entered: %016x', switch.dp.id if switch.dp.id else 0)
+        self.logger.info('Switch conectado: %016x', switch.dp.id if switch.dp.id else 0)
         self.install_default_flows(switch.dp)
-
-    @set_ev_cls(event.EventSwitchLeave)
-    def switch_leave_handler(self, ev):
-        switch = ev.switch
-        self.logger.info('Switch left: %016x', switch.dp.id if switch.dp.id else 0)
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None, idle=0, hard=0):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-
         inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        
         if buffer_id:
-            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, idle_timeout=idle, hard_timeout=hard, priority=priority,
-                                    match=match, instructions=inst)
+            mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id, 
+                                   idle_timeout=idle, hard_timeout=hard, 
+                                   priority=priority, match=match, instructions=inst)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    idle_timeout=idle, hard_timeout=hard, match=match, instructions=inst)
+                                   idle_timeout=idle, hard_timeout=hard, 
+                                   match=match, instructions=inst)
         datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
         datapath = ev.msg.datapath
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-
         self.install_default_flows(datapath)
 
     def install_default_flows(self, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-        # send all packets to controller
         match = parser.OFPMatch()
-        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, 
+                                         ofproto.OFPCML_NO_BUFFER)]
         self.add_flow(datapath, 0, match, actions)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):
-        if ev.msg.msg_len < ev.msg.total_len:
-            self.logger.debug("packet truncated: only %s of %s bytes",
-                            ev.msg.msg_len, ev.msg.total_len)
-
         msg = ev.msg
         datapath = msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
         in_port = msg.match['in_port']
 
-
-        # analyse the received packets using the packet library.
         pkt = packet.Packet(msg.data)
         eth_pkt = pkt.get_protocols(ethernet.ethernet)[0]
 
-        # ignore LLDP packets
         if eth_pkt.ethertype == ether_types.ETH_TYPE_LLDP:
             return
 
         dst = eth_pkt.dst
         src = eth_pkt.src
-
         dpid = format(datapath.id, "d").zfill(16)
+        
         self.mac_to_port.setdefault(dpid, {})
-
-        self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
-
-        # learn a mac address to avoid FLOOD next time.
         self.mac_to_port[dpid][src] = in_port
 
-        # if the destination mac address is already learned,
-        # decide which port to output the packet, otherwise FLOOD.
         if dst in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][dst]
         else:
             out_port = ofproto.OFPP_FLOOD
 
-        # construct action list.
         actions = [parser.OFPActionOutput(out_port)]
 
-        # install a flow on switches to avoid packet_in next time.
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst, eth_src=src)
-            # verify if we have a valid buffer_id, if yes avoid to send both
-            # flow_mod & packet_out
             if msg.buffer_id != ofproto.OFP_NO_BUFFER:
                 self.add_flow(datapath, 1, match, actions, msg.buffer_id)
                 return
             else:
                 self.add_flow(datapath, 1, match, actions)
+        
         data = None
         if msg.buffer_id == ofproto.OFP_NO_BUFFER:
             data = msg.data
