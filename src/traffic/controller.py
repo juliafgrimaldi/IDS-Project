@@ -194,7 +194,7 @@ class TrafficMonitor(app_manager.RyuApp):
         try:
             # Tentar diferentes encodings
             try:
-                data = pd.read_csv(self.train_file, encoding='utf-8')
+                data = pd.read_csv(self.train_file, encoding='utf-8-sig')
             except UnicodeDecodeError:
                 self.logger.warning("Erro UTF-8, tentando latin-1...")
                 data = pd.read_csv(self.train_file, encoding='latin-1')
@@ -257,7 +257,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _train_random_forest(self):
         """Treina modelo Random Forest"""
-        data = pd.read_csv(self.train_file)
+        data = pd.read_csv(self.train_file, encoding='utf-8-sig')
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
         smote = SMOTE(random_state=42)
@@ -294,7 +294,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _train_decision_tree(self):
         """Treina modelo Decision Tree"""
-        data = pd.read_csv(self.train_file)
+        data = pd.read_csv(self.train_file, encoding='utf-8-sig')
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
         smote = SMOTE(random_state=42)
@@ -331,7 +331,7 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _train_svm(self):
         """Treina modelo SVM"""
-        data = pd.read_csv(self.train_file)
+        data = pd.read_csv(self.train_file, encoding='utf-8-sig')
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
         smote = SMOTE(random_state=42)
