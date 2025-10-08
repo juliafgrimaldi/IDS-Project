@@ -27,7 +27,7 @@ from imblearn.over_sampling import SMOTE
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ML'))
 
 try:
-    from preprocessing import preprocess_data
+    from ML.preprocessing import preprocess_data
     from ML.knn import predict_knn
     from ML.svm import predict_svm
     from ML.decisiontree import predict_decision_tree
@@ -128,6 +128,26 @@ class TrafficMonitor(app_manager.RyuApp):
             except Exception as e:
                 self.logger.error("Erro ao carregar {}: {}".format(model_name, e))
 
+    def _load_dataset(self, filepath):
+        """Carrega dataset com tratamento de encoding"""
+        encodings = ['utf-8', 'latin-1', 'ISO-8859-1', 'cp1252']
+        
+        for encoding in encodings:
+            try:
+                self.logger.info("Tentando carregar com encoding: {}".format(encoding))
+                data = pd.read_csv(filepath, encoding=encoding)
+                self.logger.info("✓ Dataset carregado: {} registros com {}".format(
+                    len(data), encoding
+                ))
+                return data
+            except UnicodeDecodeError:
+                continue
+            except Exception as e:
+                self.logger.error("Erro ao carregar dataset: {}".format(e))
+                raise
+        
+        raise ValueError("Não foi possível carregar o dataset com nenhum encoding testado")
+
     def _train_all_models(self):
         """Treina todos os modelos"""
         self.logger.info("="*60)
@@ -169,9 +189,26 @@ class TrafficMonitor(app_manager.RyuApp):
 
     def _train_knn(self):
         """Treina modelo KNN"""
-        data = pd.read_csv(self.train_file)
+        self.logger.info("Carregando dataset: {}".format(self.train_file))
+        
+        try:
+            # Tentar diferentes encodings
+            try:
+                data = pd.read_csv(self.train_file, encoding='utf-8')
+            except UnicodeDecodeError:
+                self.logger.warning("Erro UTF-8, tentando latin-1...")
+                data = pd.read_csv(self.train_file, encoding='latin-1')
+            except:
+                self.logger.warning("Erro latin-1, tentando ISO-8859-1...")
+                data = pd.read_csv(self.train_file, encoding='ISO-8859-1')
+        except Exception as e:
+            self.logger.error("Erro ao carregar dataset: {}".format(e))
+            raise
+        
         if data.empty:
             raise ValueError("Dataset vazio")
+        
+        self.logger.info("Dataset carregado: {} registros".format(len(data)))
 
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
@@ -209,8 +246,14 @@ class TrafficMonitor(app_manager.RyuApp):
             'categorical_columns': categorical_columns
         }
         
-        with open(os.path.join(self.models_dir, 'knn_model_bundle.pkl'), 'wb') as f:
-            pickle.dump(bundle, f)
+        output_path = os.path.join(self.models_dir, 'knn_model_bundle.pkl')
+        try:
+            with open(output_path, 'wb') as f:
+                pickle.dump(bundle, f, protocol=pickle.HIGHEST_PROTOCOL)
+            self.logger.info("✓ KNN salvo em: {}".format(output_path))
+        except Exception as e:
+            self.logger.error("Erro ao salvar KNN: {}".format(e))
+            raise
 
     def _train_random_forest(self):
         """Treina modelo Random Forest"""
