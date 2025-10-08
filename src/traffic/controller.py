@@ -195,7 +195,7 @@ class TrafficMonitor(app_manager.RyuApp):
             # Tentar diferentes encodings
             try:
                 df = pd.read_csv(self.train_file, sep=",", encoding='utf-8-sig')
-                data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 5000)))
+                data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 2000)))
             except UnicodeDecodeError:
                 self.logger.warning("Erro UTF-8, tentando latin-1...")
                 data = pd.read_csv(self.train_file, encoding='latin-1')
@@ -259,7 +259,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _train_random_forest(self):
         """Treina modelo Random Forest"""
         df = pd.read_csv(self.train_file, sep=",", encoding='utf-8-sig')
-        data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 5000)))
+        data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 2000)))
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
         smote = SMOTE(random_state=42)
@@ -297,7 +297,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _train_decision_tree(self):
         """Treina modelo Decision Tree"""
         df = pd.read_csv(self.train_file, sep=",", encoding='utf-8-sig')
-        data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 5000)))
+        data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 2000)))
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
         smote = SMOTE(random_state=42)
@@ -335,7 +335,7 @@ class TrafficMonitor(app_manager.RyuApp):
     def _train_svm(self):
         """Treina modelo SVM"""
         df = pd.read_csv(self.train_file, sep=",", encoding='utf-8-sig')
-        data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 5000)))
+        data = df.groupby("label", group_keys=False).apply(lambda x:x.sample(min(len(x), 2000)))
         X, y, imputer, scaler, encoder, selector, numeric_columns, categorical_columns = preprocess_data(data)
         
         smote = SMOTE(random_state=42)
