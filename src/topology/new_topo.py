@@ -5,17 +5,15 @@ from mininet.log import setLogLevel, info
 from mininet.link import TCLink
 
 def create_topology():
-    """Cria topologia com configuração L3"""
     
     net = Mininet(
         controller=RemoteController,
         link=TCLink,
         autoSetMacs=True,
-        autoStaticArp=False  # Importante: não usar ARP estático
+        autoStaticArp=False  
     )
     
     info('*** Adicionando controller\n')
-    # Conecta ao Ryu controller
     c0 = net.addController(
         'c0',
         controller=RemoteController,
@@ -44,13 +42,10 @@ def create_topology():
     s1.start([c0])
     
     info('*** Configurando flows L3 no switch\n')
-    # Limpar flows existentes
     s1.dpctl('del-flows')
     
-    # Adicionar flow de ARP (necessário)
     s1.dpctl('add-flow', 'priority=100,arp,actions=flood')
     
-    # Flow padrão: encaminhar para o controller (table-miss)
     s1.dpctl('add-flow', 'priority=0,actions=output:CONTROLLER')
     
     info('*** Testando conectividade\n')
